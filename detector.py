@@ -15,7 +15,8 @@ RENDER_ZOOM = 2.0        # page render scale used for background sampling
 RING_PIXELS = 3          # width of the background sample ring around a span
 MAX_SAMPLES_PER_STRIP = 200
 
-BASELINE_TOLERANCE = 1.0  # points; flagged spans this close in y share a line
+LINE_TOLERANCE = 0.3      # spans whose baselines differ by less than this x font size share a line
+BLOCK_GAP = 2.0           # lines closer than this x font size (edge to edge) form one block
 GAP_FACTOR = 0.25         # a space is inserted when the gap exceeds this share of the font size
 
 NOTE_UNREADABLE = ("Text could not be fully extracted from this file's font. "
@@ -53,15 +54,50 @@ def scan_page(page):
 
 
 def group_by_baseline(flagged):
-    """Group flagged spans whose baselines are within BASELINE_TOLERANCE of each other."""
-    groups = []
+    """Group flagged spans into lines, then lines into blocks.
+
+    Two spans share a line when their baselines differ by less than
+    LINE_TOLERANCE x font size. Consecutive lines form one block when they are
+    vertically adjacent (gap < BLOCK_GAP x font size) and have the same reasons.
+    Returns a list of blocks; a block is a list of lines; a line is a list of
+    (span, reasons) sorted by x.
+    """
+    lines = []
     for item in sorted(flagged, key=lambda it: it[0]["origin"][1]):
-        y = item[0]["origin"][1]
-        if groups and y - groups[-1][0][0]["origin"][1] <= BASELINE_TOLERANCE:
-            groups[-1].append(item)
+        span = item[0]
+        if lines and span["origin"][1] - lines[-1][0][0]["origin"][1] < LINE_TOLERANCE * span["size"]:
+            lines[-1].append(item)
         else:
-            groups.append([item])
-    return groups
+            lines.append([item])
+    lines = [sorted(line, key=lambda it: it[0]["bbox"][0]) for line in lines]
+
+    blocks = []
+    for line in lines:
+        if blocks and same_block(blocks[-1][-1], line):
+            blocks[-1].append(line)
+        else:
+            blocks.append([line])
+    return blocks
+
+
+def line_reasons(line):
+    return {r for _, reasons in line for r in reasons}
+
+
+def line_bounds(line):
+    top = min(s["bbox"][1] for s, _ in line)
+    bottom = max(s["bbox"][3] for s, _ in line)
+    size = max(s["size"] for s, _ in line)
+    return top, bottom, size
+
+
+def same_block(prev, line):
+    """True when `line` directly follows `prev` and is hidden for the same reasons."""
+    if line_reasons(prev) != line_reasons(line):
+        return False
+    _, prev_bottom, prev_size = line_bounds(prev)
+    top, _, size = line_bounds(line)
+    return top - prev_bottom < BLOCK_GAP * max(prev_size, size)
 
 
 def iter_lines(page):
@@ -178,22 +214,24 @@ def looks_unreadable(text):
     return single / len(words) > 0.4
 
 
-def make_finding(page_number, group):
-    """Merge flagged spans sharing one baseline into a single finding."""
-    group = sorted(group, key=lambda it: it[0]["bbox"][0])
-    spans = [s for s, _ in group]
+def make_finding(page_number, block):
+    """Merge the lines of one block into a single finding (lines joined by newlines)."""
     reasons = []
-    for _, span_reasons in group:
-        for reason in span_reasons:
-            if reason not in reasons:
-                reasons.append(reason)
+    spans = []
+    for line in block:
+        for span, span_reasons in line:
+            spans.append(span)
+            for reason in span_reasons:
+                if reason not in reasons:
+                    reasons.append(reason)
     union = fitz.Rect(spans[0]["bbox"])
     for s in spans[1:]:
         union |= fitz.Rect(s["bbox"])
-    text = join_spans(spans)
+    text = "\n".join(join_spans([span for span, _ in line]) for line in block)
     return {
         "page": page_number,
         "text": text,
+        "lines": len(block),
         "reasons": reasons,
         "note": NOTE_UNREADABLE if looks_unreadable(text) else None,
         "bbox": [round(v, 1) for v in union],

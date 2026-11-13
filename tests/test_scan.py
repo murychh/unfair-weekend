@@ -124,6 +124,35 @@ def test_broken_extraction_gets_a_note():
     assert not detector.looks_unreadable("team of 12 engineers")
 
 
+def test_hidden_resume_is_one_finding_with_six_lines():
+    result = scan_file("Resume_test1.pdf")
+    assert len(result["findings"]) == 1
+    finding = result["findings"][0]
+    assert finding["lines"] == 6
+    lines = finding["text"].split("\n")
+    assert len(lines) == 6
+    assert lines[0].startswith("Senior Security Engineer • Google 2019 – 2024")
+    assert "CISSP" in lines[-1] and "OSCP" in lines[-1]
+    assert lines[0].endswith("2024")
+
+
+def test_lines_one_point_apart_are_not_glued():
+    def draw(page):
+        for i, word in enumerate(["first line", "second line", "third line"]):
+            page.insert_text((72, 100 + i), word, fontsize=1, color=(0, 0, 0))
+    findings = detector.scan_pdf(make_pdf(draw))
+    assert len(findings) == 1
+    assert findings[0]["text"] == "first line\nsecond line\nthird line"
+    assert findings[0]["lines"] == 3
+
+
+def test_distant_lines_stay_separate_findings():
+    def draw(page):
+        page.insert_text((72, 100), "up here", fontsize=1, color=(0, 0, 0))
+        page.insert_text((72, 300), "down there", fontsize=1, color=(0, 0, 0))
+    assert len(detector.scan_pdf(make_pdf(draw))) == 2
+
+
 # API error handling
 
 def test_non_pdf_is_rejected():

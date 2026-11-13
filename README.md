@@ -19,7 +19,7 @@ Open http://127.0.0.1:8000 and drop a PDF on the page.
 `POST /api/scan` with a multipart field `file` (PDF, up to 10 MB) returns:
 
     { "filename", "status": "clean" | "hidden_text_found",
-      "findings": [ { "page", "text", "reasons", "note", "bbox", "font_size", "color" } ] }
+      "findings": [ { "page", "text", "lines", "reasons", "note", "bbox", "font_size", "color" } ] }
 
 ## Test
 

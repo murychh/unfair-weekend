@@ -21,7 +21,7 @@
   .found { background: #b91c1c; }
   ul { list-style: none; padding: 0; margin: 16px 0 0; }
   li { border-top: 1px solid #e3e6ec; padding: 12px 0; }
-  .text { font-family: ui-monospace, Menlo, monospace; background: #fef2f2; padding: 6px 8px;
+  .text { white-space: pre-wrap; font-family: ui-monospace, Menlo, monospace; background: #fef2f2; padding: 6px 8px;
           border-radius: 6px; word-break: break-word; }
   .meta { color: #5b6577; font-size: 14px; margin-top: 6px; }
   .error { color: #b91c1c; }
@@ -103,7 +103,7 @@ function render(result) {
     text.textContent = f.text;
     const meta = document.createElement("div");
     meta.className = "meta";
-    meta.textContent = "Page " + f.page + " - " + f.reasons.join("; ");
+    meta.textContent = "Page " + f.page + " - " + f.lines + " hidden line" + (f.lines === 1 ? "" : "s") + " - " + f.reasons.join("; ");
     li.append(text, meta);
     if (f.note) {
       const note = document.createElement("div");
