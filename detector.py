@@ -6,7 +6,7 @@ Three rules are applied to every text span:
   c. the span lies outside the visible page area
 """
 import re
-import statistics
+from bisect import bisect_left, bisect_right
 
 import fitz  # PyMuPDF
 
@@ -107,7 +107,7 @@ def same_block(prev, line):
 
 def iter_lines(page):
     """Yield each text line of the page as a list of non-empty spans."""
-    type3 = type3_glyph_colors(page)
+    type3 = sorted_by_y(type3_glyph_colors(page))
     for block in page.get_text("dict", flags=EXTRACT_FLAGS, clip=fitz.INFINITE_RECT())["blocks"]:
         for line in block.get("lines", []):
             spans = [s for s in line["spans"] if s["text"].strip()]
@@ -120,15 +120,16 @@ def iter_lines(page):
 def check_span(span, page_rect, pixmap):
     """Return the list of reasons why a span is hidden (empty if visible)."""
     reasons = []
+    background = sample_background(pixmap, span["bbox"])
     if is_off_page(span["bbox"], page_rect):
         reasons.append(REASON_OFFPAGE)
     if is_tiny(span["size"]):
         reasons.append(REASON_TINY)
-    if matches_background(span, pixmap):
+    if matches_background(span, pixmap, background):
         reasons.append(REASON_COLOR)
     if is_transparent(span):
         reasons.append(REASON_TRANSPARENT)
-    if not reasons and is_not_drawn(span, pixmap):
+    if not reasons and is_not_drawn(span, pixmap, background):
         reasons.append(REASON_NOT_DRAWN)
     return reasons
 
@@ -216,14 +217,23 @@ def type3_glyph_colors(page):
         return {}
 
 
+def sorted_by_y(type3):
+    """Glyph list sorted by y, plus the y keys, so spans can bisect into it."""
+    glyphs = sorted((y, x, rgb) for (x, y), rgb in type3.items())
+    return glyphs, [g[0] for g in glyphs]
+
+
 def fix_type3_color(span, type3):
     """Replace the span colour with the true one when all its glyphs agree, and
     ignore the unreliable alpha of Type 3 text."""
-    if not type3:
+    glyphs, ys = type3
+    if not glyphs:
         return
     x0, y0, x1, y1 = span["bbox"]
-    found = {rgb for (x, y), rgb in type3.items() if x0 - 0.1 <= x <= x1 + 0.1 and y0 - 0.1 <= y <= y1 + 0.1}
-    if any(x0 - 0.1 <= x <= x1 + 0.1 and y0 - 0.1 <= y <= y1 + 0.1 for (x, y) in type3):
+    inside = [(x, rgb) for _, x, rgb in glyphs[bisect_left(ys, y0 - 0.1):bisect_right(ys, y1 + 0.1)]
+              if x0 - 0.1 <= x <= x1 + 0.1]
+    found = {rgb for _, rgb in inside}
+    if inside:
         span["alpha"] = 255  # PyMuPDF reports alpha 0 for every Type 3 glyph; not reliable
     if len(found) == 1:
         r, g, b = (round(v * 255) for v in found.pop())
@@ -252,12 +262,13 @@ def is_transparent(span):
 
 # Rule e
 
-def is_not_drawn(span, pixmap):
+def is_not_drawn(span, pixmap, background=None):
     """True when the text colour clearly differs from the background but the
     rendered box holds (almost) no pixel near the text colour, e.g. text under
     a white rectangle. A pixel counts as text-coloured when it is closer to the
     text colour than halfway towards the background."""
-    background = sample_background(pixmap, span["bbox"])
+    if background is None:
+        background = sample_background(pixmap, span["bbox"])
     if background is None:
         return False
     text = int_to_rgb(span["color"])
@@ -272,11 +283,13 @@ def is_not_drawn(span, pixmap):
     needed = max(1, int(MIN_INK_SHARE * (x1 - x0) * (y1 - y0)))
     limit = (contrast / 2) ** 2
     n, stride, samples = pixmap.n, pixmap.stride, pixmap.samples_mv
+    tr, tg, tb = text
     found = 0
     for y in range(y0, y1):
-        row = samples[y * stride + x0 * n: y * stride + x1 * n]
-        for i in range(0, len(row), n):
-            if sum((row[i + k] - text[k]) ** 2 for k in range(3)) < limit:
+        base = y * stride
+        for i in range(base + x0 * n, base + x1 * n, n):
+            dr, dg, db = samples[i] - tr, samples[i + 1] - tg, samples[i + 2] - tb
+            if dr * dr + dg * dg + db * db < limit:
                 found += 1
                 if found >= needed:
                     return False
@@ -285,9 +298,10 @@ def is_not_drawn(span, pixmap):
 
 # Rule a
 
-def matches_background(span, pixmap):
+def matches_background(span, pixmap, background=None):
     """True when the text colour is nearly the same as the surrounding background."""
-    background = sample_background(pixmap, span["bbox"])
+    if background is None:
+        background = sample_background(pixmap, span["bbox"])
     if background is None:
         return False
     return color_distance(int_to_rgb(span["color"]), background) < COLOR_DISTANCE
@@ -313,7 +327,13 @@ def sample_background(pixmap, bbox):
         pixels.extend(read_pixels(pixmap, *strip))
     if not pixels:
         return None
-    return tuple(statistics.median(p[i] for p in pixels) for i in range(3))
+    return tuple(median(sorted(p[i] for p in pixels)) for i in range(3))
+
+
+def median(ordered):
+    """Median of an already sorted list (same result as statistics.median)."""
+    mid = len(ordered) // 2
+    return ordered[mid] if len(ordered) % 2 else (ordered[mid - 1] + ordered[mid]) / 2
 
 
 def read_pixels(pixmap, x0, y0, x1, y1):
@@ -324,9 +344,11 @@ def read_pixels(pixmap, x0, y0, x1, y1):
         return []
     step_x = max(1, (x1 - x0) // MAX_SAMPLES_PER_STRIP)
     step_y = max(1, (y1 - y0) // MAX_SAMPLES_PER_STRIP)
-    return [pixmap.pixel(x, y)[:3]
-            for y in range(y0, y1, step_y)
-            for x in range(x0, x1, step_x)]
+    n, stride, samples = pixmap.n, pixmap.stride, pixmap.samples_mv
+    return [(samples[i], samples[i + 1], samples[i + 2])
+            for i in (y * stride + x * n
+                      for y in range(y0, y1, step_y)
+                      for x in range(x0, x1, step_x))]
 
 
 def int_to_rgb(value):
