@@ -103,8 +103,14 @@ function render(result) {
     text.textContent = f.text;
     const meta = document.createElement("div");
     meta.className = "meta";
-    meta.textContent = "Page " + f.page + " - " + f.reason;
+    meta.textContent = "Page " + f.page + " - " + f.reasons.join("; ");
     li.append(text, meta);
+    if (f.note) {
+      const note = document.createElement("div");
+      note.className = "meta";
+      note.textContent = f.note;
+      li.appendChild(note);
+    }
     list.appendChild(li);
   }
 }

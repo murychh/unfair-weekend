@@ -56,7 +56,7 @@ def test_rule_white_text_on_white():
     data = make_pdf(lambda p: p.insert_text((72, 100), "secret keyword", fontsize=12, color=(1, 1, 1)))
     findings = detector.scan_pdf(data)
     assert len(findings) == 1
-    assert findings[0]["reason"] == detector.REASON_COLOR
+    assert findings[0]["reasons"] == [detector.REASON_COLOR]
 
 
 def test_rule_colour_matches_non_white_background():
@@ -72,14 +72,14 @@ def test_rule_tiny_font():
     data = make_pdf(lambda p: p.insert_text((72, 100), "tiny text", fontsize=2, color=(0, 0, 0)))
     findings = detector.scan_pdf(data)
     assert len(findings) == 1
-    assert detector.REASON_TINY in findings[0]["reason"]
+    assert detector.REASON_TINY in findings[0]["reasons"]
 
 
 def test_rule_off_page():
     data = make_pdf(lambda p: p.insert_text((-500, 100), "outside the page", fontsize=12, color=(0, 0, 0)))
     findings = detector.scan_pdf(data)
     assert len(findings) == 1
-    assert detector.REASON_OFFPAGE in findings[0]["reason"]
+    assert detector.REASON_OFFPAGE in findings[0]["reasons"]
 
 
 def test_normal_text_is_clean():
@@ -96,6 +96,32 @@ def test_neighbouring_flagged_spans_are_merged():
     findings = detector.scan_pdf(make_pdf(draw))
     assert len(findings) == 1
     assert findings[0]["text"] == "first part second part"
+
+
+def test_many_tiny_adjacent_spans_become_one_finding():
+    def draw(page):
+        x = 72
+        for word in ["alpha", "beta", "gamma", "delta", "epsilon"]:
+            page.insert_text((x, 100), word, fontsize=1, color=(0, 0, 0))
+            x += fitz.get_text_length(word, fontsize=1) + 0.5  # gap > 1/4 of font size
+    findings = detector.scan_pdf(make_pdf(draw))
+    assert len(findings) == 1
+    assert findings[0]["text"] == "alpha beta gamma delta epsilon"
+    assert findings[0]["note"] is None
+
+
+def test_tiny_white_text_reports_both_reasons():
+    data = make_pdf(lambda p: p.insert_text((72, 100), "double trouble", fontsize=1, color=(1, 1, 1)))
+    findings = detector.scan_pdf(data)
+    assert len(findings) == 1
+    assert detector.REASON_TINY in findings[0]["reasons"]
+    assert detector.REASON_COLOR in findings[0]["reasons"]
+
+
+def test_broken_extraction_gets_a_note():
+    assert detector.looks_unreadable("a b c d e f g h")
+    assert detector.looks_unreadable("\ufffd\ufffd\ufffd ok")
+    assert not detector.looks_unreadable("team of 12 engineers")
 
 
 # API error handling

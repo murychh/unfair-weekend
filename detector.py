@@ -15,6 +15,12 @@ RENDER_ZOOM = 2.0        # page render scale used for background sampling
 RING_PIXELS = 3          # width of the background sample ring around a span
 MAX_SAMPLES_PER_STRIP = 200
 
+BASELINE_TOLERANCE = 1.0  # points; flagged spans this close in y share a line
+GAP_FACTOR = 0.25         # a space is inserted when the gap exceeds this share of the font size
+
+NOTE_UNREADABLE = ("Text could not be fully extracted from this file's font. "
+                   "Hidden content is present but partly unreadable.")
+
 REASON_COLOR = "Text colour is nearly identical to the background, so a person cannot see it"
 REASON_TINY = "Font size is below 4 pt, so a person cannot read it"
 REASON_OFFPAGE = "Text is placed outside the visible page area"
@@ -37,19 +43,25 @@ def scan_pdf(data):
 def scan_page(page):
     """Return the findings of a single page."""
     pixmap = page.get_pixmap(matrix=fitz.Matrix(RENDER_ZOOM, RENDER_ZOOM), alpha=False)
-    findings = []
+    flagged = []
     for line in iter_lines(page):
-        group = []
         for span in line:
             reasons = check_span(span, page.rect, pixmap)
             if reasons:
-                group.append((span, reasons))
-            elif group:
-                findings.append(make_finding(page.number + 1, group))
-                group = []
-        if group:
-            findings.append(make_finding(page.number + 1, group))
-    return findings
+                flagged.append((span, reasons))
+    return [make_finding(page.number + 1, group) for group in group_by_baseline(flagged)]
+
+
+def group_by_baseline(flagged):
+    """Group flagged spans whose baselines are within BASELINE_TOLERANCE of each other."""
+    groups = []
+    for item in sorted(flagged, key=lambda it: it[0]["origin"][1]):
+        y = item[0]["origin"][1]
+        if groups and y - groups[-1][0][0]["origin"][1] <= BASELINE_TOLERANCE:
+            groups[-1].append(item)
+        else:
+            groups.append([item])
+    return groups
 
 
 def iter_lines(page):
@@ -142,22 +154,48 @@ def color_distance(a, b):
 
 # Output
 
+def join_spans(spans):
+    """Join spans (sorted by x) into text; add a space only across a wide gap."""
+    text = spans[0]["text"]
+    for prev, span in zip(spans, spans[1:]):
+        gap = span["bbox"][0] - prev["bbox"][2]
+        if gap > GAP_FACTOR * span["size"] and not (text[-1:].isspace() or span["text"][:1].isspace()):
+            text += " "
+        text += span["text"]
+    return text.strip()
+
+
+def looks_unreadable(text):
+    """True when extracted text looks broken: replacement characters or mostly single letters."""
+    if not text:
+        return False
+    if (text.count("\ufffd") + sum(1 for c in text if 0xE000 <= ord(c) <= 0xF8FF)) / len(text) > 0.2:
+        return True
+    words = text.split()
+    if len(words) < 4:
+        return False
+    single = sum(1 for w in words if len(w) == 1)
+    return single / len(words) > 0.4
+
+
 def make_finding(page_number, group):
-    """Merge neighbouring flagged spans of one line into a single finding."""
+    """Merge flagged spans sharing one baseline into a single finding."""
+    group = sorted(group, key=lambda it: it[0]["bbox"][0])
     spans = [s for s, _ in group]
     reasons = []
     for _, span_reasons in group:
         for reason in span_reasons:
             if reason not in reasons:
                 reasons.append(reason)
-    boxes = [fitz.Rect(s["bbox"]) for s in spans]
-    union = boxes[0]
-    for box in boxes[1:]:
-        union |= box
+    union = fitz.Rect(spans[0]["bbox"])
+    for s in spans[1:]:
+        union |= fitz.Rect(s["bbox"])
+    text = join_spans(spans)
     return {
         "page": page_number,
-        "text": "".join(s["text"] for s in spans).strip(),
-        "reason": "; ".join(reasons),
+        "text": text,
+        "reasons": reasons,
+        "note": NOTE_UNREADABLE if looks_unreadable(text) else None,
         "bbox": [round(v, 1) for v in union],
         "font_size": round(min(s["size"] for s in spans), 1),
         "color": "#%06x" % spans[0]["color"],
