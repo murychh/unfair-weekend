@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ClearRead</title>
+<style>
+  body { font-family: system-ui, sans-serif; background: #f4f5f7; color: #1a2233; margin: 0; }
+  main { max-width: 720px; margin: 0 auto; padding: 32px 16px; }
+  h1 { margin: 0 0 4px; }
+  .sub { color: #5b6577; margin: 0 0 24px; }
+  #drop { border: 2px dashed #9aa4b5; border-radius: 12px; background: #fff; padding: 48px 16px;
+          text-align: center; cursor: pointer; color: #5b6577; }
+  #drop.over { border-color: #2563eb; background: #eef4ff; }
+  #card { background: #fff; border-radius: 12px; padding: 20px; margin-top: 24px; display: none;
+          box-shadow: 0 1px 3px rgba(0,0,0,.1); }
+  .head { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+  .name { font-weight: 600; word-break: break-all; }
+  .badge { color: #fff; padding: 4px 12px; border-radius: 999px; font-size: 14px; white-space: nowrap; }
+  .clean { background: #15803d; }
+  .found { background: #b91c1c; }
+  ul { list-style: none; padding: 0; margin: 16px 0 0; }
+  li { border-top: 1px solid #e3e6ec; padding: 12px 0; }
+  .text { font-family: ui-monospace, Menlo, monospace; background: #fef2f2; padding: 6px 8px;
+          border-radius: 6px; word-break: break-word; }
+  .meta { color: #5b6577; font-size: 14px; margin-top: 6px; }
+  .error { color: #b91c1c; }
+</style>
+</head>
+<body>
+<main>
+  <h1>ClearRead</h1>
+  <p class="sub">Find text in a PDF resume that people cannot see but AI screening tools can read.</p>
+
+  <div id="drop">Drop a PDF here or click to choose one</div>
+  <input id="picker" type="file" accept="application/pdf" hidden>
+
+  <div id="card">
+    <div class="head">
+      <span class="name" id="filename"></span>
+      <span class="badge" id="badge"></span>
+    </div>
+    <div id="message"></div>
+    <ul id="findings"></ul>
+  </div>
+</main>
+
+<script>
+const drop = document.getElementById("drop");
+const picker = document.getElementById("picker");
+const card = document.getElementById("card");
+
+drop.addEventListener("click", () => picker.click());
+picker.addEventListener("change", () => picker.files[0] && upload(picker.files[0]));
+drop.addEventListener("dragover", (e) => { e.preventDefault(); drop.classList.add("over"); });
+drop.addEventListener("dragleave", () => drop.classList.remove("over"));
+drop.addEventListener("drop", (e) => {
+  e.preventDefault();
+  drop.classList.remove("over");
+  if (e.dataTransfer.files[0]) upload(e.dataTransfer.files[0]);
+});
+
+async function upload(file) {
+  showCard(file.name, null, "Scanning...");
+  const body = new FormData();
+  body.append("file", file);
+  try {
+    const response = await fetch("/api/scan", { method: "POST", body });
+    const result = await response.json();
+    if (!response.ok) {
+      showCard(file.name, null, result.detail || "Scan failed", true);
+      return;
+    }
+    render(result);
+  } catch (err) {
+    showCard(file.name, null, "Could not reach the server", true);
+  }
+}
+
+function showCard(name, badge, message, isError) {
+  card.style.display = "block";
+  document.getElementById("filename").textContent = name;
+  const badgeEl = document.getElementById("badge");
+  badgeEl.textContent = "";
+  badgeEl.className = "badge";
+  const msg = document.getElementById("message");
+  msg.textContent = message || "";
+  msg.className = isError ? "error" : "";
+  document.getElementById("findings").innerHTML = "";
+}
+
+function render(result) {
+  showCard(result.filename, null, "");
+  const badge = document.getElementById("badge");
+  const found = result.status === "hidden_text_found";
+  badge.textContent = found ? "Hidden text found" : "Clean";
+  badge.className = "badge " + (found ? "found" : "clean");
+  const list = document.getElementById("findings");
+  for (const f of result.findings) {
+    const li = document.createElement("li");
+    const text = document.createElement("div");
+    text.className = "text";
+    text.textContent = f.text;
+    const meta = document.createElement("div");
+    meta.className = "meta";
+    meta.textContent = "Page " + f.page + " - " + f.reason;
+    li.append(text, meta);
+    list.appendChild(li);
+  }
+}
+</script>
+</body>
+</html>
