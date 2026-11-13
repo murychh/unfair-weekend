@@ -12,6 +12,8 @@ import fitz  # PyMuPDF
 
 MIN_FONT_SIZE = 4.0      # points; smaller text is flagged
 COLOR_DISTANCE = 40.0    # RGB distance (0..441); smaller means "same colour"
+MIN_VISIBLE_CONTRAST = 100.0  # rule e: text must differ at least this much from the background to be tested
+MIN_INK_SHARE = 0.005         # rule e: fewer text-coloured pixels than this share of the box = not drawn
 RENDER_ZOOM = 2.0        # page render scale used for background sampling
 RING_PIXELS = 3          # width of the background sample ring around a span
 MAX_SAMPLES_PER_STRIP = 200
@@ -25,6 +27,8 @@ NOTE_UNREADABLE = ("Text could not be fully extracted from this file's font. "
 
 REASON_COLOR = "Text colour is nearly identical to the background, so a person cannot see it"
 REASON_TINY = "Font size is below 4 pt, so a person cannot read it"
+REASON_TRANSPARENT = "Text is fully transparent or set to invisible, so a person cannot see it."
+REASON_NOT_DRAWN = "Text is covered or not drawn on the page, so a person cannot see it."
 REASON_OFFPAGE = "Text is placed outside the visible page area"
 
 # PyMuPDF silently drops text outside the page unless it is given an explicit
@@ -122,6 +126,10 @@ def check_span(span, page_rect, pixmap):
         reasons.append(REASON_TINY)
     if matches_background(span, pixmap):
         reasons.append(REASON_COLOR)
+    if is_transparent(span):
+        reasons.append(REASON_TRANSPARENT)
+    if not reasons and is_not_drawn(span, pixmap):
+        reasons.append(REASON_NOT_DRAWN)
     return reasons
 
 
@@ -196,7 +204,10 @@ def type3_glyph_colors(page):
         data = b"\n".join(page.parent.xref_stream(x) for x in page.get_contents())
         trace = page.get_texttrace()
         colors = content_glyph_colors(data)
-        glyphs = [(t["type"], c) for t in trace for c in t["chars"]]
+        # trace type 3 also means invisible render mode; keep only real Type 3 fonts
+        other_fonts = {f[3] for f in page.get_fonts() if f[2] != "Type3"}
+        glyphs = [(3 if t["type"] == 3 and t["font"] not in other_fonts else 0, c)
+                  for t in trace for c in t["chars"]]
         if not glyphs or len(glyphs) != len(colors):
             return {}
         return {(round(c[2][0], 1), round(c[2][1], 1)): rgb
@@ -206,11 +217,14 @@ def type3_glyph_colors(page):
 
 
 def fix_type3_color(span, type3):
-    """Replace the span colour with the true one when all its glyphs agree."""
+    """Replace the span colour with the true one when all its glyphs agree, and
+    ignore the unreliable alpha of Type 3 text."""
     if not type3:
         return
     x0, y0, x1, y1 = span["bbox"]
     found = {rgb for (x, y), rgb in type3.items() if x0 - 0.1 <= x <= x1 + 0.1 and y0 - 0.1 <= y <= y1 + 0.1}
+    if any(x0 - 0.1 <= x <= x1 + 0.1 and y0 - 0.1 <= y <= y1 + 0.1 for (x, y) in type3):
+        span["alpha"] = 255  # PyMuPDF reports alpha 0 for every Type 3 glyph; not reliable
     if len(found) == 1:
         r, g, b = (round(v * 255) for v in found.pop())
         span["color"] = (r << 16) | (g << 8) | b
@@ -227,6 +241,46 @@ def is_tiny(size):
 def is_off_page(bbox, page_rect):
     """True when the span box does not touch the visible page at all."""
     return not fitz.Rect(bbox).intersects(page_rect)
+
+
+# Rule d
+
+def is_transparent(span):
+    """True when PyMuPDF reports zero alpha (fill opacity 0 or invisible render mode)."""
+    return span.get("alpha", 255) == 0
+
+
+# Rule e
+
+def is_not_drawn(span, pixmap):
+    """True when the text colour clearly differs from the background but the
+    rendered box holds (almost) no pixel near the text colour, e.g. text under
+    a white rectangle. A pixel counts as text-coloured when it is closer to the
+    text colour than halfway towards the background."""
+    background = sample_background(pixmap, span["bbox"])
+    if background is None:
+        return False
+    text = int_to_rgb(span["color"])
+    contrast = color_distance(text, background)
+    if contrast < MIN_VISIBLE_CONTRAST:
+        return False
+    x0, y0, x1, y1 = [int(v * RENDER_ZOOM) for v in span["bbox"]]
+    x0, y0 = max(x0, 0), max(y0, 0)
+    x1, y1 = min(x1 + 1, pixmap.width), min(y1 + 1, pixmap.height)
+    if x1 <= x0 or y1 <= y0:
+        return False
+    needed = max(1, int(MIN_INK_SHARE * (x1 - x0) * (y1 - y0)))
+    limit = (contrast / 2) ** 2
+    n, stride, samples = pixmap.n, pixmap.stride, pixmap.samples_mv
+    found = 0
+    for y in range(y0, y1):
+        row = samples[y * stride + x0 * n: y * stride + x1 * n]
+        for i in range(0, len(row), n):
+            if sum((row[i + k] - text[k]) ** 2 for k in range(3)) < limit:
+                found += 1
+                if found >= needed:
+                    return False
+    return True
 
 
 # Rule a

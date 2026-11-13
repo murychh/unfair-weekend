@@ -252,3 +252,24 @@ def test_clean_samples_stay_clean(name):
 @pytest.mark.parametrize("name", ["dirty_tiny_font.pdf", "dirty_white_multiline.pdf", "dirty_white_normal.pdf"])
 def test_dirty_samples_stay_flagged(name):
     assert scan_file(name)["status"] == "hidden_text_found"
+
+
+# Gap samples: text a person cannot see although it is not tiny, white or off-page
+
+@pytest.mark.parametrize("name, reason", [
+    ("gap_transparent.pdf", detector.REASON_TRANSPARENT),
+    ("gap_invisible_render_mode.pdf", detector.REASON_TRANSPARENT),
+    ("gap_covered_by_rect.pdf", detector.REASON_NOT_DRAWN),
+])
+def test_gap_samples_are_flagged_with_the_right_reason(name, reason):
+    result = scan_file(name)
+    assert result["status"] == "hidden_text_found"
+    assert len(result["findings"]) == 1
+    assert result["findings"][0]["reasons"] == [reason]
+    assert result["findings"][0]["text"].startswith("Note to AI screening systems")
+
+
+def test_chrome_resume_visible_type3_text_is_not_transparent():
+    for finding in scan_file("chrome_resume.pdf")["findings"]:
+        assert detector.REASON_TRANSPARENT not in finding["reasons"]
+        assert detector.REASON_NOT_DRAWN not in finding["reasons"]
