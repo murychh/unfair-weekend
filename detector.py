@@ -5,6 +5,7 @@ Three rules are applied to every text span:
   b. the font size is tiny
   c. the span lies outside the visible page area
 """
+import re
 import statistics
 
 import fitz  # PyMuPDF
@@ -17,7 +18,7 @@ MAX_SAMPLES_PER_STRIP = 200
 
 LINE_TOLERANCE = 0.3      # spans whose baselines differ by less than this x font size share a line
 BLOCK_GAP = 2.0           # lines closer than this x font size (edge to edge) form one block
-GAP_FACTOR = 0.25         # a space is inserted when the gap exceeds this share of the font size
+GAP_FACTOR = 0.1          # between spans a space is inserted when the gap exceeds this share of the font size
 
 NOTE_UNREADABLE = ("Text could not be fully extracted from this file's font. "
                    "Hidden content is present but partly unreadable.")
@@ -102,9 +103,12 @@ def same_block(prev, line):
 
 def iter_lines(page):
     """Yield each text line of the page as a list of non-empty spans."""
+    type3 = type3_glyph_colors(page)
     for block in page.get_text("dict", flags=EXTRACT_FLAGS, clip=fitz.INFINITE_RECT())["blocks"]:
         for line in block.get("lines", []):
             spans = [s for s in line["spans"] if s["text"].strip()]
+            for span in spans:
+                fix_type3_color(span, type3)
             if spans:
                 yield spans
 
@@ -119,6 +123,97 @@ def check_span(span, page_rect, pixmap):
     if matches_background(span, pixmap):
         reasons.append(REASON_COLOR)
     return reasons
+
+
+# Colour of Type 3 fonts
+#
+# PyMuPDF reports black for the glyphs of Type 3 fonts (what Chrome and Skia
+# produce when printing to PDF), whatever fill colour the page really sets.
+# So white text in such a file looks black and rule a can never fire. We read
+# the true fill colour of every glyph from the page's content stream instead.
+
+TOKEN_RE = re.compile(rb"\[(?:\\.|[^\]])*\]|<[0-9A-Fa-f\s]*>|\((?:\\.|[^\\)])*\)|/[^\s/\[\]<>()]*|[^\s/\[\]<>()]+", re.S)
+STRING_RE = re.compile(rb"<([0-9A-Fa-f\s]*)>|\(((?:\\.|[^\\)])*)\)", re.S)
+TEXT_SHOW_OPS = {b"Tj", b"TJ", b"'", b'"'}
+
+
+def string_length(token):
+    """Number of glyph codes in the string(s) of a Tj/TJ operand."""
+    count = 0
+    for hexed, literal in STRING_RE.findall(token):
+        if hexed or token.lstrip().startswith(b"<"):
+            count += (len(re.sub(rb"\s", b"", hexed)) + 1) // 2
+        else:
+            count += len(re.sub(rb"\\([0-7]{1,3}|.)", b"x", literal))
+    return count
+
+
+def to_rgb(operator, operands):
+    """Convert a colour operator's numeric operands to an (r, g, b) tuple, or None."""
+    try:
+        nums = [float(o) for o in operands]
+    except ValueError:
+        return None
+    if operator == b"g" and len(nums) == 1:
+        return (nums[0],) * 3
+    if operator == b"rg" and len(nums) == 3:
+        return tuple(nums)
+    if operator == b"k" and len(nums) == 4:
+        c, m, y, k = nums
+        return tuple((1 - v) * (1 - k) for v in (c, m, y))
+    return None
+
+
+def content_glyph_colors(data):
+    """Fill colour of each glyph code shown in a content stream, in drawing order."""
+    colors, stack, fill, operands = [], [], (0.0, 0.0, 0.0), []
+    for token in TOKEN_RE.findall(data):
+        first = token[:1]
+        if first in b"[</(" or re.fullmatch(rb"[-+.\d]+", token):
+            operands.append(token)
+            continue
+        if token == b"q":
+            stack.append(fill)
+        elif token == b"Q":
+            fill = stack.pop() if stack else fill
+        elif token in (b"g", b"rg", b"k"):
+            fill = to_rgb(token, operands) or fill
+        elif token in (b"sc", b"scn") and len(operands) in (1, 3, 4):
+            fill = to_rgb({1: b"g", 3: b"rg", 4: b"k"}[len(operands)], operands) or fill
+        elif token in TEXT_SHOW_OPS and operands:
+            colors.extend([fill] * string_length(operands[-1]))
+        operands = []
+    return colors
+
+
+def type3_glyph_colors(page):
+    """Map glyph origin -> true fill colour for text PyMuPDF cannot colour.
+
+    Returns {} when the content stream cannot be matched glyph for glyph to
+    PyMuPDF's own text trace, in which case the reported colours are kept.
+    """
+    try:
+        data = b"\n".join(page.parent.xref_stream(x) for x in page.get_contents())
+        trace = page.get_texttrace()
+        colors = content_glyph_colors(data)
+        glyphs = [(t["type"], c) for t in trace for c in t["chars"]]
+        if not glyphs or len(glyphs) != len(colors):
+            return {}
+        return {(round(c[2][0], 1), round(c[2][1], 1)): rgb
+                for (kind, c), rgb in zip(glyphs, colors) if kind == 3}
+    except Exception:
+        return {}
+
+
+def fix_type3_color(span, type3):
+    """Replace the span colour with the true one when all its glyphs agree."""
+    if not type3:
+        return
+    x0, y0, x1, y1 = span["bbox"]
+    found = {rgb for (x, y), rgb in type3.items() if x0 - 0.1 <= x <= x1 + 0.1 and y0 - 0.1 <= y <= y1 + 0.1}
+    if len(found) == 1:
+        r, g, b = (round(v * 255) for v in found.pop())
+        span["color"] = (r << 16) | (g << 8) | b
 
 
 # Rule b
