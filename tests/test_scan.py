@@ -206,6 +206,24 @@ def test_non_pdf_is_rejected():
     assert response.json()["detail"] == "This file is not a PDF."
 
 
+def test_large_non_pdf_says_not_a_pdf_not_too_big():
+    response = post_bytes("movie.mov", b"\x00\x00\x00\x14ftypqt  " + b"\x00" * (12 * 1024 * 1024))
+    assert response.status_code == 400
+    assert response.json()["detail"] == "This file is not a PDF."
+
+
+def test_large_pdf_says_too_big():
+    response = post_bytes("big.pdf", b"%PDF-1.7\n" + b"0" * (12 * 1024 * 1024))
+    assert response.status_code == 413
+    assert response.json()["detail"] == "File is larger than 10 MB."
+
+
+def test_pdf_signature_may_follow_leading_whitespace():
+    with open(SAMPLES / "clean_basic.pdf", "rb") as f:
+        response = post_bytes("clean_basic.pdf", b"\n \r\n" + f.read())
+    assert response.status_code == 200
+
+
 def test_png_is_rejected():
     png = b"\x89PNG\r\n\x1a\n" + b"\x00" * 64
     response = post_bytes("image.pdf", png)

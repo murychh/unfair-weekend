@@ -60,7 +60,21 @@ drop.addEventListener("drop", (e) => {
   if (e.dataTransfer.files[0]) upload(e.dataTransfer.files[0]);
 });
 
+const MAX_BYTES = 10 * 1024 * 1024;
+
+// Quick checks before sending; the server repeats them and is the real protection.
+function clientError(file) {
+  if (!/\.pdf$/i.test(file.name) || file.type !== "application/pdf") return "This file is not a PDF.";
+  if (file.size > MAX_BYTES) return "File is larger than 10 MB.";
+  return null;
+}
+
 async function upload(file) {
+  const problem = clientError(file);
+  if (problem) {
+    showCard(file.name, null, problem, true);
+    return;
+  }
   showCard(file.name, null, "Scanning...");
   const body = new FormData();
   body.append("file", file);
