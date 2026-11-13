@@ -68,7 +68,7 @@ async function upload(file) {
     const response = await fetch("/api/scan", { method: "POST", body });
     const result = await response.json();
     if (!response.ok) {
-      showCard(file.name, null, result.detail || "Scan failed", true);
+      showCard(file.name, null, (typeof result.detail === "string" && result.detail) || "Scan failed", true);
       return;
     }
     render(result);

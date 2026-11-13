@@ -190,6 +190,65 @@ def test_text_inside_one_span_is_kept_as_is():
 
 # API error handling
 
-def test_non_pdf_is_rejected():
-    response = client.post("/api/scan", files={"file": ("a.pdf", b"not a pdf", "application/pdf")})
+def post_bytes(name, data):
+    return client.post("/api/scan", files={"file": (name, data, "application/pdf")})
+
+
+def test_empty_file_is_rejected():
+    response = post_bytes("empty.pdf", b"")
     assert response.status_code == 400
+    assert response.json()["detail"] == "The file is empty."
+
+
+def test_non_pdf_is_rejected():
+    response = post_bytes("a.pdf", b"not a pdf")
+    assert response.status_code == 400
+    assert response.json()["detail"] == "This file is not a PDF."
+
+
+def test_png_is_rejected():
+    png = b"\x89PNG\r\n\x1a\n" + b"\x00" * 64
+    response = post_bytes("image.pdf", png)
+    assert response.status_code == 400
+    assert response.json()["detail"] == "This file is not a PDF."
+
+
+def test_truncated_pdf_is_rejected_cleanly():
+    response = post_bytes("broken.pdf", b"%PDF-1.7\n1 0 obj <<")
+    assert response.status_code == 400
+    assert response.json()["detail"] == "This file is not a PDF."
+
+
+def test_encrypted_pdf_is_rejected():
+    with open(SAMPLES / "encrypted.pdf", "rb") as f:
+        response = post_bytes("encrypted.pdf", f.read())
+    assert response.status_code == 400
+    assert response.json()["detail"] == (
+        "This PDF is password-protected. Please remove the password and upload it again.")
+
+
+def test_scanned_image_is_not_reported_clean():
+    with open(SAMPLES / "edge_scanned_image.pdf", "rb") as f:
+        response = post_bytes("edge_scanned_image.pdf", f.read())
+    assert response.status_code == 400
+    assert response.json()["detail"].startswith("No text layer found")
+    assert "status" not in response.json()
+
+
+def test_multipage_dirty_has_two_findings_on_page_two():
+    result = scan_file("multipage_dirty.pdf")
+    assert [f["page"] for f in result["findings"]] == [2, 2]
+
+
+def test_multipage_clean_is_clean():
+    assert scan_file("multipage_clean.pdf")["status"] == "clean"
+
+
+@pytest.mark.parametrize("name", ["clean_basic.pdf", "clean_small_footnote.pdf", "clean_white_on_dark.pdf"])
+def test_clean_samples_stay_clean(name):
+    assert scan_file(name)["status"] == "clean"
+
+
+@pytest.mark.parametrize("name", ["dirty_tiny_font.pdf", "dirty_white_multiline.pdf", "dirty_white_normal.pdf"])
+def test_dirty_samples_stay_flagged(name):
+    assert scan_file(name)["status"] == "hidden_text_found"
