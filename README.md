@@ -12,6 +12,13 @@ Not implemented yet: producing a cleaned copy of the file, storing results.
     .venv/bin/pip install -r requirements.txt
     .venv/bin/uvicorn main:app --reload
 
+On Windows (Command Prompt or PowerShell):
+
+    python -m venv .venv
+    .venv\Scripts\activate
+    pip install -r requirements.txt
+    python -m uvicorn main:app --port 8000
+
 Open http://127.0.0.1:8000 and drop a PDF on the page.
 
 ## API
