@@ -28,7 +28,10 @@ Open http://127.0.0.1:8000 and drop a PDF on the page.
 `POST /api/scan` with a multipart field `file` (PDF, up to 10 MB) returns:
 
     { "filename", "status": "clean" | "hidden_text_found",
-      "findings": [ { "page", "text", "lines", "reasons", "note", "bbox", "font_size", "color" } ] }
+      "findings": [ { "page", "text", "lines", "reasons", "note", "bbox", "font_size", "color" } ],
+      "notes": [ "..." ] }
+
+`notes` lists extra remarks, for example pages without a text layer that weren't checked.
 
 `POST /api/clean` takes the same upload and returns a new PDF with the hidden text removed
 (redactions limited to the flagged spans, no visible fill; the original is never modified).

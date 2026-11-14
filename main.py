@@ -63,9 +63,29 @@ def validate_upload(data):
         doc.close()
 
 
+def page_has_text(page):
+    """True when the page holds at least one non-blank text character."""
+    return bool(page.get_text("text", clip=fitz.INFINITE_RECT()).strip())
+
+
 def has_text_layer(doc):
     """True when any page holds at least one non-blank text character."""
-    return any(page.get_text("text", clip=fitz.INFINITE_RECT()).strip() for page in doc)
+    return any(page_has_text(page) for page in doc)
+
+
+def scan_notes(data):
+    """Extra remarks about a scan, as a list of strings (empty when there are none)."""
+    doc = fitz.open(stream=data, filetype="pdf")
+    try:
+        skipped = [page.number + 1 for page in doc if not page_has_text(page)]
+    finally:
+        doc.close()
+    if not skipped:
+        return []
+    if len(skipped) == 1:
+        return [f"Page {skipped[0]} has no text layer and wasn't checked."]
+    pages = ", ".join(str(n) for n in skipped)
+    return [f"Pages {pages} have no text layer and weren't checked."]
 
 
 async def read_upload(file):
@@ -90,12 +110,14 @@ async def scan(file: UploadFile = File(...)):
     data = await read_upload(file)
     try:
         findings = detector.scan_pdf(data)
+        notes = scan_notes(data)
     except Exception:  # PyMuPDF raises various errors for broken files
         raise HTTPException(400, MSG_DAMAGED)
     return {
         "filename": file.filename,
         "status": "hidden_text_found" if findings else "clean",
         "findings": findings,
+        "notes": notes,
     }
 
 

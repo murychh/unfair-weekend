@@ -20,7 +20,7 @@
   .badge { color: #fff; padding: 4px 12px; border-radius: 999px; font-size: 14px; white-space: nowrap; }
   .clean { background: #15803d; }
   .found { background: #b91c1c; }
-  .unchecked { background: #5b6577; }
+  .unchecked { background: #c2410c; }
   #verdict { display: flex; flex-direction: column; gap: 16px; margin-top: 16px; }
   #verdict > :empty { display: none; }
   #findings { list-style: none; padding: 0; margin: 0; }
@@ -65,6 +65,7 @@
       </ul>
       <ul id="findings"></ul>
       <div id="cleanmsg"></div>
+      <div id="notes"></div>
     </div>
     <div id="actions" class="buttons" hidden>
       <button id="origbtn" class="secondary" type="button" hidden>Download original</button>
@@ -218,19 +219,35 @@ function showCard(name, badge, message, isError) {
     badgeEl.className = "badge unchecked";
   }
   document.getElementById("cleanmsg").textContent = "";
+  document.getElementById("notes").innerHTML = "";
 }
 
 function render(result) {
   showCard(result.filename, null, "");
   const badge = document.getElementById("badge");
   const found = result.status === "hidden_text_found";
-  badge.textContent = found ? "Hidden text found" : "Clean";
+  badge.textContent = found ? "Hidden text" : "Clean";
   badge.className = "badge " + (found ? "found" : "clean");
   document.getElementById("actions").hidden = false;
   document.getElementById("origbtn").hidden = !found;
   document.getElementById("cleanbtn").hidden = !found;
   document.getElementById("okbtn").hidden = found;
   document.getElementById("okchecks").hidden = found;
+  const notes = result.notes || [];
+  if (notes.length) {
+    const box = document.getElementById("notes");
+    const title = document.createElement("div");
+    title.className = "meta";
+    title.textContent = "Notes";
+    const items = document.createElement("ul");
+    items.className = "reasons";
+    for (const note of notes) {
+      const item = document.createElement("li");
+      item.textContent = note;
+      items.appendChild(item);
+    }
+    box.append(title, items);
+  }
   const list = document.getElementById("findings");
   for (const f of result.findings) {
     const li = document.createElement("li");
