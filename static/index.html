@@ -27,6 +27,8 @@
   .error { color: #b91c1c; }
   .ok { color: #15803d; }
   #cleanbar { margin-top: 16px; display: none; }
+  #okbar { margin-top: 16px; display: none; }
+  button.full { width: 100%; }
   .reasons { margin: 4px 0 0; padding-left: 20px; font-size: 14px; color: #5b6577; }
   .checks { list-style: none; margin: 12px 0 0; padding: 0; color: #15803d; }
   .checks li { padding: 2px 0; }
@@ -59,6 +61,13 @@
         <button id="cleanbtn" type="button">Download clean copy</button>
       </div>
       <div id="cleanmsg"></div>
+    </div>
+    <div id="okbar">
+      <button id="okbtn" class="full" type="button">Download clean copy</button>
+      <ul class="checks">
+        <li>No hidden text found</li>
+        <li>Nothing removed, file unchanged</li>
+      </ul>
     </div>
   </div>
 </main>
@@ -144,6 +153,11 @@ document.getElementById("origbtn").addEventListener("click", () => {
   if (currentFile) saveBlob(currentFile, baseName(currentFile) + "_original.pdf");
 });
 
+// A clean file needs no server call: the upload is saved back as it is.
+document.getElementById("okbtn").addEventListener("click", () => {
+  if (currentFile) saveBlob(currentFile, baseName(currentFile) + "_clean.pdf");
+});
+
 async function cleanCopy() {
   if (!currentFile) return;
   const button = document.getElementById("cleanbtn");
@@ -195,6 +209,7 @@ function showCard(name, badge, message, isError) {
   msg.className = isError ? "error" : "";
   document.getElementById("findings").innerHTML = "";
   document.getElementById("cleanbar").style.display = "none";
+  document.getElementById("okbar").style.display = "none";
   document.getElementById("cleanmsg").textContent = "";
 }
 
@@ -205,6 +220,7 @@ function render(result) {
   badge.textContent = found ? "Hidden text found" : "Clean";
   badge.className = "badge " + (found ? "found" : "clean");
   document.getElementById("cleanbar").style.display = found ? "block" : "none";
+  document.getElementById("okbar").style.display = found ? "none" : "block";
   const list = document.getElementById("findings");
   for (const f of result.findings) {
     const li = document.createElement("li");
