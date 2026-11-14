@@ -33,18 +33,20 @@
   .sheet .role { color: var(--muted); margin-bottom: 12px; }
   .sheet .lab { font-weight: 600; margin-top: 4px; }
   .sheet .ln::before { content: ""; position: absolute; inset: 0 -2px; z-index: -1; background: var(--sel); transform: scaleX(0);
-                       transform-origin: left; animation: sweep .45s linear var(--d) forwards, unsel .7s ease var(--u, 99s) forwards; }
-  .sheet .hid { color: #fff; margin-top: 4px; animation: reveal .01s linear var(--r) forwards; }
-  .sheet .hid::before { animation: sweep .45s linear var(--d) forwards; }
+                       transform-origin: left; }
+  .sheet .hid { color: #fff; margin-top: 4px; }
+  .sheet.run .ln::before { animation: sweep .45s linear var(--d) forwards; }
+  .sheet.run .hid { animation: reveal .01s linear var(--r) forwards; }
+  .sheet.fade .ln::before { animation: sweep .45s linear var(--d) forwards, unsel .7s ease forwards; }
+  .sheet.fade .hid { animation: reveal .01s linear var(--r) forwards, hide .7s ease forwards; }
+  .sheet.final .ln::before, .sheet.final .hid::before { animation: none; transform: scaleX(1); opacity: 0; }
+  .sheet.final .hid { animation: none; color: var(--ink); }
+  .sheet.final .hid::before { opacity: 1; }
   @keyframes sweep { to { transform: scaleX(1); } }
   @keyframes unsel { to { opacity: 0; } }
   @keyframes reveal { to { color: var(--ink); } }
+  @keyframes hide { to { color: #fff; } }
   .caption { color: var(--muted); font-size: 13px; margin: 12px 0 0; max-width: 360px; }
-  @media (prefers-reduced-motion: reduce) {
-    .sheet .ln::before { animation: none; transform: scaleX(1); opacity: 0; }
-    .sheet .hid { animation: none; color: var(--ink); }
-    .sheet .hid::before { opacity: 1; }
-  }
 
   #card { background: var(--paper); border-radius: 3px; padding: 24px; margin-top: 24px; display: none; box-shadow: var(--shadow); }
   .head { display: flex; justify-content: space-between; align-items: center; gap: 12px;
@@ -74,7 +76,8 @@
   .buttons { display: flex; gap: 8px; }
   .buttons button { flex: 1 1 0; min-width: 0; }
   #findings > li { cursor: pointer; }
-  #findings > li.selected { box-shadow: -13px 0 0 -10px var(--sel-line); }
+  .textblock { padding: 4px 6px; margin: -4px -6px 0; border-radius: 3px; outline: 2px solid transparent; }
+  #findings > li.selected .textblock { outline-color: var(--sel-line); }
   #viewer { margin-top: 24px; padding-top: 24px; border-top: 1px solid var(--line); }
   .viewer-bar { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 12px; }
   .pager { display: flex; align-items: center; gap: 8px; }
@@ -127,11 +130,11 @@
 
   <div id="drop">
     <div class="sheetwrap" aria-hidden="true">
-      <div class="sheet">
-        <span class="ln name" style="--d:.5s;--u:3.4s">Alex Morgan</span>
-        <span class="ln role" style="--d:1s;--u:3.4s">Junior Security Analyst</span>
-        <span class="ln lab" style="--d:1.5s;--u:3.4s">Experience</span>
-        <span class="ln" style="--d:2s;--u:3.4s">Junior Security Analyst, MDAS, 2018 to 2019</span>
+      <div class="sheet" id="sheet">
+        <span class="ln name" style="--d:.5s">Alex Morgan</span>
+        <span class="ln role" style="--d:1s">Junior Security Analyst</span>
+        <span class="ln lab" style="--d:1.5s">Experience</span>
+        <span class="ln" style="--d:2s">Junior Security Analyst, MDAS, 2018 to 2019</span>
         <span class="ln hid" style="--d:2.5s;--r:2.7s">Senior Security Engineer at Google, 2019 to 2024</span>
       </div>
       <p class="caption">Select all on this resume and a hidden line shows up. ClearRead finds lines like this for you.</p>
@@ -142,7 +145,7 @@
     </div>
   </div>
   <input id="picker" type="file" accept="application/pdf" hidden>
-  <p class="privacy">Files are checked on this computer and aren't stored.</p>
+  <p class="privacy">Files aren't stored after checking.</p>
 
   <div id="card">
     <div class="head">
@@ -202,6 +205,35 @@ drop.addEventListener("drop", (e) => {
   if (e.dataTransfer.files[0]) upload(e.dataTransfer.files[0]);
 });
 
+// Hero loop: sweep, hold the revealed line about 3 s, fade out, wait about 2 s, repeat.
+const sheet = document.getElementById("sheet");
+let heroTimers = [];
+let heroStopped = false;
+function clearHero() { heroTimers.forEach(clearTimeout); heroTimers = []; }
+function heroCycle() {
+  clearHero();
+  sheet.classList.remove("run", "fade", "final");
+  void sheet.offsetWidth;
+  sheet.classList.add("run");
+  heroTimers.push(setTimeout(() => sheet.classList.add("fade"), 5950));
+  heroTimers.push(setTimeout(heroCycle, 8650));
+}
+function stopHero() {
+  heroStopped = true;
+  clearHero();
+  sheet.classList.remove("run", "fade");
+  sheet.classList.add("final");
+}
+if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+  stopHero();
+} else {
+  heroCycle();
+  document.addEventListener("visibilitychange", () => {
+    if (heroStopped) return;
+    if (document.hidden) clearHero(); else heroCycle();
+  });
+}
+
 const MAX_BYTES = 10 * 1024 * 1024;
 
 // Quick checks before sending; the server repeats them and is the real protection.
@@ -243,6 +275,7 @@ function saveBlob(blob, filename) {
 }
 
 async function upload(file) {
+  stopHero();
   currentFile = null;
   const problem = await clientError(file);
   if (problem) {
@@ -593,7 +626,10 @@ function render(result) {
       item.textContent = stripPeriod(reason);
       reasons.appendChild(item);
     }
-    li.append(text, meta, reasons);
+    const block = document.createElement("div");
+    block.className = "textblock";
+    block.appendChild(text);
+    li.append(block, meta, reasons);
     meta.prepend(num);
     li.addEventListener("click", () => selectFinding(f));
     if (f.note) {
