@@ -53,12 +53,9 @@
   .shot img { width: 100%; height: auto; display: block; }
   .crop { position: relative; }
   .mark { position: absolute; box-sizing: border-box; border: 2px solid #b91c1c; pointer-events: none; }
-  .mark.sel { border-width: 4px; background: rgba(185, 28, 28, .12); }
+  .mark.sel { box-shadow: 0 0 0 2px #b91c1c; }
   .mark .num { position: absolute; right: 100%; top: 0; margin-right: 2px; background: #b91c1c; color: #fff;
                font: 600 11px/1 system-ui, sans-serif; padding: 2px 4px; border-radius: 3px; }
-  .mark .num.above { right: auto; left: 0; top: auto; bottom: 100%; margin: 0 0 2px; }
-  .mark.sel .num { margin-right: 4px; }
-  .mark.sel .num.above { margin: 0 0 4px; }
   .hidden-read { margin-top: 8px; color: #b91c1c; font-family: system-ui, sans-serif; font-size: 15px; line-height: 1.4;
                  white-space: pre-wrap; overflow-wrap: anywhere; unicode-bidi: plaintext; }
   .plain { line-height: 1.3; color: #b91c1c; font-family: system-ui, sans-serif; white-space: pre-wrap;
@@ -253,12 +250,32 @@ function makeMark(finding, area, selectedNow, withNumber = true) {
   return el;
 }
 
-// A label sits left of its box. If the box is too close to the left edge of its container, it goes above.
+// Labels sit left of their box (above it when the left edge is too close). A label that would overlap an
+// earlier one goes to the right of its box, and then shifts down until it is free.
 function placeLabels(container) {
+  const cbox = container.getBoundingClientRect();
+  const placed = [];
+  const free = (r) => placed.every((p) => r.right <= p.left || r.left >= p.right || r.bottom <= p.top || r.top >= p.bottom);
   for (const num of container.querySelectorAll(".mark .num")) {
-    num.classList.remove("above");
-    const room = num.parentElement.getBoundingClientRect().left - container.getBoundingClientRect().left;
-    if (room < num.offsetWidth + 6) num.classList.add("above");
+    const mark = num.parentElement;
+    const m = mark.getBoundingClientRect();
+    const w = num.offsetWidth, h = num.offsetHeight, gap = 3;
+    const grow = mark.classList.contains("sel") ? 2 : 0;
+    const spots = [
+      m.left - grow - gap - w >= cbox.left ? [m.left - grow - gap - w, m.top] : [m.left, m.top - grow - gap - h],
+      [m.right + grow + gap, m.top],
+    ];
+    let pick = spots.find(([x, y]) => free({ left: x, top: y, right: x + w, bottom: y + h }));
+    if (!pick) {
+      let [x, y] = spots[1];
+      while (!free({ left: x, top: y, right: x + w, bottom: y + h }) && y < cbox.bottom) y += h + 2;
+      pick = [x, y];
+    }
+    num.style.right = "auto";
+    num.style.margin = "0";
+    num.style.left = pick[0] - m.left - mark.clientLeft + "px";
+    num.style.top = pick[1] - m.top - mark.clientTop + "px";
+    placed.push({ left: pick[0], top: pick[1], right: pick[0] + w, bottom: pick[1] + h });
   }
 }
 

@@ -58,6 +58,17 @@ def draw_highlight(page, finding):
                    width=1, overlay=True)
 
 
+def marked_crop(data, number, finding, area, matrix):
+    """Close-up with only this finding highlighted (other findings in the area stay unmarked)."""
+    doc = fitz.open(stream=data, filetype="pdf")
+    try:
+        page = doc[number - 1]
+        draw_highlight(page, finding)
+        return page.get_pixmap(matrix=matrix, clip=area, alpha=False)
+    finally:
+        doc.close()
+
+
 def render_pages(data, findings):
     """Return one dict per page that has findings: sizes, both images and close-ups."""
     doc = fitz.open(stream=data, filetype="pdf")
@@ -85,7 +96,7 @@ def render_pages(data, findings):
                     entry["crop"] = {
                         "box": [a.x0, a.y0, a.x1, a.y1],
                         "normal": png_data_url(crops_normal[i]),
-                        "marked": png_data_url(page.get_pixmap(matrix=crop_matrix, clip=a, alpha=False)),
+                        "marked": png_data_url(marked_crop(data, number, f, a, crop_matrix)),
                     }
                 entries.append(entry)
             pages.append({
