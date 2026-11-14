@@ -62,8 +62,7 @@
   #findings > li { border-top: 1px solid var(--line); padding: 12px 0; }
   #findings > li:first-child { border-top: 0; padding-top: 0; }
   #findings > li:last-child { padding-bottom: 0; }
-  .text { display: inline; white-space: pre-wrap; font-size: 15px; line-height: 1.7; color: var(--ink); background: var(--sel);
-          word-break: break-word; -webkit-box-decoration-break: clone; box-decoration-break: clone; }
+  .text { display: block; white-space: pre-wrap; font-size: 15px; line-height: 1.6; color: var(--ink); word-break: break-word; }
   .meta { color: var(--muted); font-size: 14px; margin-top: 8px; }
   .error { color: var(--red); }
   .ok { color: var(--green); }
@@ -76,8 +75,8 @@
   .buttons { display: flex; gap: 8px; }
   .buttons button { flex: 1 1 0; min-width: 0; }
   #findings > li { cursor: pointer; }
-  .textblock { padding: 4px 6px; margin: -4px -6px 0; border-radius: 3px; outline: 2px solid transparent; }
-  #findings > li.selected .textblock { outline-color: var(--sel-line); }
+  .textblock { padding: 10px 14px; background: #EEF5FF; border: 1px dashed var(--sel-line); border-radius: 3px; }
+  #findings > li.selected .textblock { padding: 9px 13px; border: 2px solid var(--sel-line); }
   #viewer { margin-top: 24px; padding-top: 24px; border-top: 1px solid var(--line); }
   .viewer-bar { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 12px; }
   .pager { display: flex; align-items: center; gap: 8px; }
