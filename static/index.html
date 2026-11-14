@@ -4,46 +4,56 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>ClearRead</title>
-<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%232563eb'/%3E%3Cpath d='M9 6h9l5 5v6' fill='none' stroke='%23fff' stroke-width='2' stroke-linejoin='round' stroke-linecap='round'/%3E%3Cpath d='M9 6v19h6' fill='none' stroke='%23fff' stroke-width='2' stroke-linecap='round'/%3E%3Ccircle cx='20' cy='21' r='4' fill='none' stroke='%23fff' stroke-width='2'/%3E%3Cpath d='M23 24l3.5 3.5' stroke='%23fff' stroke-width='2' stroke-linecap='round'/%3E%3C/svg%3E">
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%2316130F'/%3E%3Cpath d='M9 6h9l5 5v15H9z' fill='none' stroke='%23FAF8F4' stroke-width='2' stroke-linejoin='round'/%3E%3Crect x='12' y='14' width='9' height='4' fill='%23C8102E'/%3E%3C/svg%3E">
 <style>
-  :root { --ink: #1a2233; --muted: #5b6577; --line: #e3e6ec; --bg: #f4f5f7; --red: #b91c1c; --blue: #2563eb;
-          --blue-dark: #1d4ed8; --blue-soft: #eef4ff; --green: #15803d; --dashed: #9aa4b5;
-          --s1: 4px; --s2: 8px; --s3: 16px; --s4: 24px; --s5: 32px; }
+  :root { --ink: #16130F; --muted: #6B645B; --line: #E6E0D6; --bg: #FAF8F4; --paper: #FFFFFF;
+          --red: #C8102E; --red-soft: rgba(200,16,46,.11); --red-mid: rgba(200,16,46,.22);
+          --green: #2F6B3F; --amber: #B26B00;
+          --serif: ui-serif, "New York", Georgia, serif;
+          --s1: 4px; --s2: 8px; --s3: 16px; --s4: 24px; --s5: 40px; }
 
-  body { font-family: system-ui, sans-serif; background: var(--bg); color: var(--ink); margin: 0; }
-  main { max-width: 720px; margin: 0 auto; padding: 32px 16px; }
-  .brand { display: flex; align-items: center; gap: 12px; }
+  body { font-family: system-ui, sans-serif; background: var(--bg); color: var(--ink); margin: 0; line-height: 1.5; }
+  main { max-width: 760px; margin: 0 auto; padding: 32px 16px 64px; }
+  .brand { display: flex; align-items: center; gap: 10px; }
   .brand svg { flex: none; }
-  h1 { margin: 0; font-size: 28px; line-height: 1.2; }
-  .sub { color: var(--muted); font-size: 16px; margin: var(--s2) 0 var(--s1); }
-  .privacy { color: var(--muted); font-size: 14px; margin: 0 0 var(--s4); }
-  #drop { border: 2px dashed var(--dashed); border-radius: 12px; background: #fff; padding: 40px 16px;
+  .brand span { font: 600 17px/1 var(--serif); letter-spacing: .01em; }
+  h1 { margin: 48px 0 0; font: 600 46px/1.1 var(--serif); letter-spacing: -.01em; }
+  .sub { color: var(--muted); font-size: 18px; line-height: 1.5; margin: 16px 0 0; max-width: 620px; }
+  .privacy { color: var(--muted); font-size: 13px; margin: 12px 0 var(--s5); }
+  #drop { border: 1.5px dashed #B5AC9C; border-radius: 6px; background: var(--paper); padding: 72px 16px;
           text-align: center; cursor: pointer; color: var(--muted); font-size: 16px;
+          box-shadow: 0 1px 2px rgba(22,19,15,.04);
           transition: border-color .15s, background-color .15s, color .15s; }
-  #drop svg { display: block; margin: 0 auto var(--s2); stroke: currentColor; }
-  #drop:hover, #drop.over { border-color: var(--blue); background: var(--blue-soft); color: var(--blue-dark); }
+  #drop svg { display: block; margin: 0 auto 12px; stroke: currentColor; }
+  #drop:hover { border-color: var(--ink); color: var(--ink); }
+  #drop.over { border-color: var(--red); background: #FBEDEF; color: var(--red); }
   #drop.over { border-style: solid; }
-  #card { background: #fff; border-radius: 12px; padding: 20px; margin-top: 24px; display: none;
-          box-shadow: 0 1px 2px rgba(16,24,40,.06), 0 4px 12px rgba(16,24,40,.06); }
+  .steps { display: flex; justify-content: center; flex-wrap: wrap; gap: 8px 24px; list-style: none; margin: 24px 0 0;
+           padding: 0; color: var(--muted); font-size: 14px; }
+  .steps b { font: 600 13px/1 var(--serif); color: var(--ink); border: 1px solid var(--ink); border-radius: 50%;
+             display: inline-block; width: 20px; height: 20px; line-height: 19px; text-align: center; margin-right: 8px; }
+  #card { background: var(--paper); border: 1px solid var(--line); border-radius: 6px; padding: 24px; margin-top: 24px; display: none;
+          box-shadow: 0 1px 2px rgba(22,19,15,.05), 0 6px 20px rgba(22,19,15,.04); }
   .head { display: flex; justify-content: space-between; align-items: center; gap: 12px;
           padding-bottom: 16px; border-bottom: 1px solid var(--line); }
-  .name { font-weight: 600; word-break: break-all; }
-  .badge { color: #fff; padding: 4px 12px; border-radius: 999px; font-size: 14px; white-space: nowrap; }
+  .name { font: 600 18px/1.3 var(--serif); word-break: break-all; }
+  .badge { color: #fff; padding: 4px 10px; border-radius: 4px; font-size: 13px; font-weight: 600; white-space: nowrap; }
   .clean { background: var(--green); }
   .found { background: var(--red); }
-  .unchecked { background: #c2410c; }
+  .unchecked { background: var(--amber); }
   #verdict { display: flex; flex-direction: column; gap: 16px; margin-top: 16px; }
   #verdict > :empty { display: none; }
   #findings { list-style: none; padding: 0; margin: 0; }
-  #findings > li { border-top: 1px solid var(--line); padding: 8px 0; }
+  #findings > li { border-top: 1px solid var(--line); padding: 12px 0; }
   #findings > li:first-child { border-top: 0; padding-top: 0; }
   #findings > li:last-child { padding-bottom: 0; }
-  .text { white-space: pre-wrap; font-family: ui-monospace, Menlo, monospace; background: #fef2f2; padding: 6px 8px;
-          border-radius: 6px; word-break: break-word; }
-  .meta { color: var(--muted); font-size: 14px; margin-top: 6px; }
+  .text { display: inline; white-space: pre-wrap; font-family: ui-monospace, Menlo, monospace; font-size: 14px; line-height: 1.9;
+          color: var(--red); background: var(--red-soft); padding: 2px 0; word-break: break-word;
+          -webkit-box-decoration-break: clone; box-decoration-break: clone; }
+  .meta { color: var(--muted); font-size: 14px; margin-top: 8px; }
   .error { color: var(--red); }
   .ok { color: var(--green); }
-  #actions { margin-top: 16px; }
+  #actions { margin-top: 24px; }
   .reasons { list-style: disc; margin: 4px 0 0; padding-left: 20px; font-size: 14px; color: var(--muted); }
   .heading { font-size: 14px; font-weight: 500; color: var(--muted); }
   .checks { list-style: none; margin: 0; padding: 0; color: var(--green); }
@@ -52,40 +62,42 @@
   .buttons { display: flex; gap: 8px; }
   .buttons button { flex: 1 1 0; min-width: 0; }
   #findings > li { cursor: pointer; }
-  #findings > li.selected .text { outline: 2px solid var(--red); }
-  #viewer { margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--line); }
+  #findings > li.selected { box-shadow: -12px 0 0 -9px var(--red); }
+  #findings > li.selected .text { background: var(--red-mid); }
+  #viewer { margin-top: 24px; padding-top: 24px; border-top: 1px solid var(--line); }
   .viewer-bar { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 12px; }
   .pager { display: flex; align-items: center; gap: 8px; }
   .pager button { padding: 4px 12px; }
-  .pair { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-  .pane h3 { margin: 0 0 6px; font-size: 14px; font-weight: 500; color: var(--muted); }
-  .zoomtitle { margin: 16px 0 8px; font-size: 14px; font-weight: 500; color: var(--muted); }
-  .shot { position: relative; overflow: hidden; line-height: 0; border: 1px solid var(--line); container-type: inline-size; }
+  .pair { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .pane h3 { margin: 0 0 6px; font: 600 14px/1.3 var(--serif); color: var(--muted); }
+  .zoomtitle { margin: 24px 0 8px; font: 600 15px/1.3 var(--serif); color: var(--muted); }
+  .shot { position: relative; overflow: hidden; line-height: 0; border: 1px solid var(--line); background: #fff; container-type: inline-size; }
   .shot img { width: 100%; height: auto; display: block; }
   .crop { position: relative; }
   .mark { position: absolute; box-sizing: border-box; border: 2px solid var(--red); pointer-events: none; }
   .mark.sel { box-shadow: 0 0 0 2px var(--red); }
   .mark .num { position: absolute; right: 100%; top: 0; margin-right: 2px; background: var(--red); color: #fff;
                font: 600 11px/1 system-ui, sans-serif; padding: 2px 4px; border-radius: 3px; }
-  .hidden-read { margin-top: 8px; color: var(--red); font-family: system-ui, sans-serif; font-size: 15px; line-height: 1.4;
+  .hidden-read { margin-top: 8px; color: var(--red); font-family: ui-monospace, Menlo, monospace; font-size: 13px; line-height: 1.5;
                  white-space: pre-wrap; overflow-wrap: anywhere; unicode-bidi: plaintext; }
-  .plain { line-height: 1.3; color: var(--red); font-family: system-ui, sans-serif; white-space: pre-wrap;
+  .plain { line-height: 1.3; color: var(--red); font-family: ui-monospace, Menlo, monospace; white-space: pre-wrap;
            overflow-wrap: anywhere; unicode-bidi: plaintext; padding: 8px; border: 1px solid var(--line); }
   .fnum { display: inline-block; background: var(--red); color: #fff; font: 600 11px/1 system-ui, sans-serif;
           padding: 2px 5px; border-radius: 3px; margin-right: 6px; }
-  @media (max-width: 640px) { .pair { grid-template-columns: 1fr; } }
+  @media (max-width: 640px) { .pair { grid-template-columns: 1fr; } h1 { font-size: 34px; margin-top: 32px; } .sub { font-size: 16px; }
+                              #drop { padding: 48px 16px; } #card { padding: 16px; } .buttons { flex-wrap: wrap; } .buttons button { flex-basis: 100%; } }
   [hidden] { display: none !important; }
-  button { background: var(--blue); color: #fff; border: 1px solid var(--blue); border-radius: 8px; padding: 8px 16px; font-size: 15px; cursor: pointer;
-           transition: background-color .15s, border-color .15s, box-shadow .15s, transform .05s; }
-  button:hover:not(:disabled) { background: var(--blue-dark); border-color: var(--blue-dark); box-shadow: 0 1px 4px rgba(37,99,235,.3); }
-  button.secondary:hover:not(:disabled) { background: var(--blue-soft); color: var(--blue-dark); box-shadow: none; }
+  button { background: var(--ink); color: #fff; border: 1px solid var(--ink); border-radius: 6px; padding: 9px 16px; font-size: 15px; cursor: pointer;
+           transition: background-color .15s, border-color .15s, color .15s, transform .05s; }
+  button:hover:not(:disabled) { background: #3A342C; border-color: #3A342C; }
+  button.secondary:hover:not(:disabled) { background: var(--ink); color: var(--bg); border-color: var(--ink); }
   button:active:not(:disabled) { transform: translateY(1px); }
-  button:focus-visible, #drop:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
-  button.secondary { background: #fff; color: var(--blue); }
-  button:disabled { opacity: .6; cursor: default; }
+  button:focus-visible, #drop:focus-visible { outline: 2px solid var(--red); outline-offset: 2px; }
+  button.secondary { background: transparent; color: var(--ink); }
+  button:disabled { opacity: .5; cursor: default; }
   .busy { display: flex; align-items: center; gap: 10px; color: var(--muted); }
   .busy::before { content: ""; width: 18px; height: 18px; flex: none; box-sizing: border-box; border-radius: 50%;
-                  border: 2px solid var(--line); border-top-color: var(--blue); animation: spin .8s linear infinite; }
+                  border: 2px solid var(--line); border-top-color: var(--ink); animation: spin .8s linear infinite; }
   @keyframes spin { to { transform: rotate(360deg); } }
   @media (prefers-reduced-motion: reduce) { .busy::before { animation-duration: 2.4s; } }
 </style>
@@ -93,10 +105,11 @@
 <body>
 <main>
   <div class="brand">
-    <svg width="36" height="36" viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="7" fill="#2563eb"/><path d="M9 6h9l5 5v6" fill="none" stroke="#fff" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/><path d="M9 6v19h6" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round"/><circle cx="20" cy="21" r="4" fill="none" stroke="#fff" stroke-width="2"/><path d="M23 24l3.5 3.5" stroke="#fff" stroke-width="2" stroke-linecap="round"/></svg>
-    <h1>ClearRead</h1>
+    <svg width="26" height="26" viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="6" fill="#16130F"/><path d="M9 6h9l5 5v15H9z" fill="none" stroke="#FAF8F4" stroke-width="2" stroke-linejoin="round"/><rect x="12" y="14" width="9" height="4" fill="#C8102E"/></svg>
+    <span>ClearRead</span>
   </div>
-  <p class="sub">Find text in a resume that people can't see but AI screening tools can read.</p>
+  <h1>See what the AI reads.</h1>
+  <p class="sub">Resumes can hide text that people can't see but AI screening tools read and trust. ClearRead finds it and removes it.</p>
   <p class="privacy">Files are checked on this computer and aren't stored.</p>
 
   <div id="drop" tabindex="0" role="button">
@@ -104,6 +117,7 @@
     Drop a .pdf file here or click to choose one
   </div>
   <input id="picker" type="file" accept="application/pdf" hidden>
+  <ol class="steps" id="steps"><li><b>1</b>Upload</li><li><b>2</b>Reveal hidden text</li><li><b>3</b>Download a clean copy</li></ol>
 
   <div id="card">
     <div class="head">
@@ -484,6 +498,7 @@ async function cleanCopy() {
 
 function showCard(name, badge, message, isError) {
   card.style.display = "block";
+  document.getElementById("steps").hidden = true;
   document.getElementById("filename").textContent = name;
   const badgeEl = document.getElementById("badge");
   badgeEl.textContent = "";
