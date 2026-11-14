@@ -108,7 +108,7 @@
         <div class="pane"><h3>What the AI reads</h3><div class="shot"><img id="imgmarked" alt="The page with hidden text marked in red"><div id="overlay"></div></div></div>
       </div>
       <div id="viewnote" class="meta"></div>
-      <h3 class="zoomtitle">Zoomed in</h3>
+      <h3 class="zoomtitle" id="zoomtitle">Zoomed in</h3>
       <div class="pair">
         <div class="pane"><h3>What a person sees</h3><div class="shot" id="zoomleft"></div></div>
         <div class="pane"><h3>What the AI reads</h3><div class="shot" id="zoomright"></div><div id="zoomtext" class="hidden-read" dir="auto"></div></div>
@@ -234,7 +234,7 @@ async function loadPreview() {
 function pct(value) { return value * 100 + "%"; }
 
 // A highlight box with its number, placed inside a container that shows `area` = [x0, y0, x1, y1] of the page.
-function makeMark(finding, area, selectedNow) {
+function makeMark(finding, area, selectedNow, withNumber = true) {
   const [ax0, ay0, ax1, ay1] = area;
   const [x0, y0, x1, y1] = finding.bbox;
   const left = Math.max(x0, ax0), top = Math.max(y0, ay0);
@@ -249,7 +249,7 @@ function makeMark(finding, area, selectedNow) {
   const num = document.createElement("span");
   num.className = "num";
   num.textContent = currentFindings.indexOf(finding) + 1;
-  el.appendChild(num);
+  if (withNumber) el.appendChild(num);
   return el;
 }
 
@@ -300,6 +300,7 @@ function updateZoom() {
   const finding = selected || currentFindings[0];
   const entry = page.findings.find((e) => currentFindings[e.index] === finding) || page.findings[0];
   const shown = currentFindings[entry.index];
+  document.getElementById("zoomtitle").textContent = "Zoomed in \u00b7 Finding " + (currentFindings.indexOf(shown) + 1);
   const left = document.getElementById("zoomleft");
   const right = document.getElementById("zoomright");
   const text = document.getElementById("zoomtext");
@@ -324,7 +325,7 @@ function updateZoom() {
     img.src = url;
     wrap.appendChild(img);
     if (marked) {
-      const el = makeMark(shown, crop.box, true);
+      const el = makeMark(shown, crop.box, true, false);
       if (el) wrap.appendChild(el);
     }
     box.appendChild(wrap);
