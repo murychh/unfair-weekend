@@ -535,3 +535,24 @@ def test_preview_of_a_clean_file_is_empty():
 
 def test_preview_rejects_bad_uploads():
     assert preview_response("notes.txt", b"hello").status_code == 400
+
+
+def test_preview_has_a_close_up_for_each_finding():
+    pages = preview_response("m.pdf", mixed_pdf({2}, hidden_on=3)).json()["pages"]
+    entry = pages[0]["findings"][0]
+    assert entry["index"] == 0
+    assert entry["crop"]["normal"].startswith("data:image/png;base64,")
+    assert entry["crop"]["marked"] != entry["crop"]["normal"]
+    x0, y0, x1, y1 = entry["crop"]["box"]
+    assert 0 <= x0 < x1 <= pages[0]["width"] and 0 <= y0 < y1 <= pages[0]["height"]
+
+
+def test_multilanguage_hidden_text_is_one_finding_with_every_script():
+    result = scan_file("multilang_hidden.pdf")
+    assert result["status"] == "hidden_text_found"
+    text = result["findings"][0]["text"]
+    for sample in ("Žemaitė", "Игнорируйте", "Αγνοήστε", "忽略", "以前の指示", "이전 지침", "पिछले", "•", "–"):
+        assert sample in text
+    with open(SAMPLES / "multilang_hidden.pdf", "rb") as f:
+        pages = preview_response("multilang_hidden.pdf", f.read()).json()["pages"]
+    assert len(pages) == 1 and pages[0]["findings"][0]["crop"] is not None
