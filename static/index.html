@@ -27,7 +27,9 @@
   .error { color: #b91c1c; }
   .ok { color: #15803d; }
   #cleanbar { margin-top: 16px; display: none; }
-  button { background: #2563eb; color: #fff; border: 0; border-radius: 8px; padding: 8px 16px; font-size: 15px; cursor: pointer; }
+  .buttons { display: flex; flex-wrap: wrap; gap: 8px; }
+  button { background: #2563eb; color: #fff; border: 1px solid #2563eb; border-radius: 8px; padding: 8px 16px; font-size: 15px; cursor: pointer; }
+  button.secondary { background: #fff; color: #2563eb; }
   button:disabled { opacity: .6; cursor: default; }
 </style>
 </head>
@@ -47,7 +49,10 @@
     <div id="message"></div>
     <ul id="findings"></ul>
     <div id="cleanbar">
-      <button id="cleanbtn" type="button">Download clean copy</button>
+      <div class="buttons">
+        <button id="cleanbtn" type="button">Download clean copy</button>
+        <button id="origbtn" class="secondary" type="button">Download original</button>
+      </div>
       <div id="cleanmsg"></div>
     </div>
   </div>
@@ -78,6 +83,22 @@ function clientError(file) {
 }
 
 let currentFile = null;
+let hiddenLineCount = 0;
+
+function baseName(file) {
+  return file.name.replace(/\.pdf$/i, "");
+}
+
+function saveBlob(blob, filename) {
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+}
 
 async function upload(file) {
   currentFile = null;
@@ -97,6 +118,7 @@ async function upload(file) {
       return;
     }
     currentFile = file;
+    hiddenLineCount = result.findings.reduce((sum, f) => sum + f.lines, 0);
     render(result);
   } catch (err) {
     showCard(file.name, null, "Could not reach the server", true);
@@ -104,6 +126,9 @@ async function upload(file) {
 }
 
 document.getElementById("cleanbtn").addEventListener("click", cleanCopy);
+document.getElementById("origbtn").addEventListener("click", () => {
+  if (currentFile) saveBlob(currentFile, baseName(currentFile) + "_original.pdf");
+});
 
 async function cleanCopy() {
   if (!currentFile) return;
@@ -122,16 +147,10 @@ async function cleanCopy() {
       msg.textContent = (typeof result.detail === "string" && result.detail) || "Cleaning failed";
       return;
     }
-    const url = URL.createObjectURL(await response.blob());
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = "clean_" + currentFile.name;
-    document.body.appendChild(link);
-    link.click();
-    link.remove();
-    URL.revokeObjectURL(url);
+    saveBlob(await response.blob(), baseName(currentFile) + "_clean.pdf");
     msg.className = "ok";
-    msg.textContent = "Clean copy verified: 0 hidden lines, visible text unchanged.";
+    msg.textContent = "Removed " + hiddenLineCount + " hidden " + (hiddenLineCount === 1 ? "line" : "lines") +
+      ". Clean copy re-checked: no hidden text left, visible text unchanged.";
   } catch (err) {
     msg.className = "error";
     msg.textContent = "Could not reach the server";
