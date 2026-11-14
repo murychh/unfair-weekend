@@ -34,7 +34,7 @@
   .ok { color: #15803d; }
   #actions { margin-top: 16px; }
   .reasons { list-style: disc; margin: 4px 0 0; padding-left: 20px; font-size: 14px; color: #5b6577; }
-  .notes-title { font-size: 14px; font-weight: 600; color: #3b4454; }
+  .heading { font-size: 14px; font-weight: 500; color: #5b6577; }
   .checks { list-style: none; margin: 0; padding: 0; color: #15803d; }
   .checks li { padding: 2px 0; }
   .checks li::before { content: "\2713"; font-weight: 700; margin-right: 8px; }
@@ -243,7 +243,7 @@ function render(result) {
   if (notes.length) {
     const box = document.getElementById("notes");
     const title = document.createElement("div");
-    title.className = "notes-title";
+    title.className = "heading";
     title.textContent = "Notes";
     const items = document.createElement("ul");
     items.className = "reasons";
@@ -261,7 +261,7 @@ function render(result) {
     text.className = "text";
     text.textContent = f.text;
     const meta = document.createElement("div");
-    meta.className = "meta";
+    meta.className = "meta heading";
     meta.textContent = "Page " + f.page + " \u00b7 " + f.lines + " hidden line" + (f.lines === 1 ? "" : "s");
     const reasons = document.createElement("ul");
     reasons.className = "reasons";
