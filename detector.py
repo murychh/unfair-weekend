@@ -22,13 +22,13 @@ LINE_TOLERANCE = 0.3      # spans whose baselines differ by less than this x fon
 BLOCK_GAP = 2.0           # lines closer than this x font size (edge to edge) form one block
 GAP_FACTOR = 0.1          # between spans a space is inserted when the gap exceeds this share of the font size
 
-NOTE_UNREADABLE = ("Text could not be fully extracted from this file's font. "
+NOTE_UNREADABLE = ("Text couldn't be fully extracted from this file's font. "
                    "Hidden content is present but partly unreadable.")
 
-REASON_COLOR = "Text colour is nearly identical to the background, so a person cannot see it"
-REASON_TINY = "Font size is below 4 pt, so a person cannot read it"
-REASON_TRANSPARENT = "Text is fully transparent or set to invisible, so a person cannot see it."
-REASON_NOT_DRAWN = "Text is covered or not drawn on the page, so a person cannot see it."
+REASON_COLOR = "Text colour is nearly identical to the background, so a person can't see it"
+REASON_TINY = "Font size is below 4 pt, so a person can't read it"
+REASON_TRANSPARENT = "Text is fully transparent or set to invisible, so a person can't see it."
+REASON_NOT_DRAWN = "Text is covered or not drawn on the page, so a person can't see it."
 REASON_OFFPAGE = "Text is placed outside the visible page area"
 
 # PyMuPDF silently drops text outside the page unless it is given an explicit

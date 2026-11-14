@@ -135,7 +135,7 @@ async function upload(file) {
     hiddenLineCount = result.findings.reduce((sum, f) => sum + f.lines, 0);
     render(result);
   } catch (err) {
-    showCard(file.name, null, "Could not reach the server", true);
+    showCard(file.name, null, "Couldn't reach the server", true);
   }
 }
 
@@ -178,7 +178,7 @@ async function cleanCopy() {
     msg.appendChild(checks);
   } catch (err) {
     msg.className = "error";
-    msg.textContent = "Could not reach the server";
+    msg.textContent = "Couldn't reach the server";
   } finally {
     button.disabled = false;
   }

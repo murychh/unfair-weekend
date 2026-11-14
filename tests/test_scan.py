@@ -433,3 +433,16 @@ def test_truncated_pdf_says_it_cannot_be_opened():
 def test_no_extension_message():
     response = post_bytes("resume", b"%PDF-1.7")
     assert response.json()["detail"] == "Only .pdf files are supported. This file has no extension."
+
+
+def test_user_facing_text_uses_contractions():
+    import re
+    import main
+    texts = [detector.NOTE_UNREADABLE, detector.REASON_COLOR, detector.REASON_TINY,
+             detector.REASON_TRANSPARENT, detector.REASON_NOT_DRAWN, detector.REASON_OFFPAGE,
+             main.MSG_TOO_BIG, main.MSG_EMPTY, main.MSG_NO_EXTENSION, main.MSG_DAMAGED,
+             main.MSG_ENCRYPTED, main.MSG_NO_TEXT,
+             (Path(__file__).parent.parent / "static" / "index.html").read_text()]
+    full_forms = re.compile(r"\b(cannot|could not|is not|are not|do not|does not|will not|was not)\b", re.I)
+    for text in texts:
+        assert not full_forms.search(text), text
