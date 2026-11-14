@@ -299,6 +299,7 @@ let currentFile = null;
 let hiddenLineCount = 0;
 let currentFindings = [];
 let previewPages = null;
+let previewTruncated = false;
 let viewIndex = 0;
 let selected = null;
 
@@ -363,6 +364,7 @@ async function loadPreview() {
     const result = await response.json();
     if (!response.ok) throw new Error();
     previewPages = result.pages;
+    previewTruncated = !!result.truncated;
     return true;
   } catch (err) {
     note.className = "error";
@@ -434,7 +436,8 @@ function showViewPage(index) {
   document.getElementById("nextpage").disabled = viewIndex === previewPages.length - 1;
   const note = document.getElementById("viewnote");
   note.className = "meta";
-  note.textContent = page.outside ? "Text outside the page can't be shown here." : "";
+  note.textContent = [page.outside ? "Text outside the page can't be shown here." : "",
+                      previewTruncated ? "Only the first pages and findings are shown here." : ""].filter(Boolean).join(" ");
   for (const shot of document.querySelectorAll(".shot")) shot.style.aspectRatio = page.width + " / " + page.height;
   updateMark();
   updateZoom();
@@ -480,10 +483,12 @@ function updateZoom() {
   text.textContent = shown.text;
   const crop = entry.crop;
   if (!crop) {
+    const [x0, y0, x1, y1] = shown.bbox;
+    const outside = x1 <= 0 || y1 <= 0 || x0 >= page.width || y0 >= page.height;
     const note = document.createElement("div");
     note.className = "plain";
     note.style.color = "#5b6577";
-    note.textContent = "This text is outside the page, so nobody can see it.";
+    note.textContent = outside ? "This text is outside the page, so nobody can see it." : "No close-up is shown for this finding.";
     left.appendChild(note);
     right.hidden = true;
     return;

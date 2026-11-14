@@ -7,11 +7,17 @@ For every page with findings we render, as PNGs:
 The hidden text itself is shown by the browser as an HTML overlay, so any
 script is displayed with the browser's own font fallback.
 The uploaded file is never changed; drawing happens on an in-memory copy.
+
+The work is limited so a file with very many findings stays fast and the response small:
+at most MAX_PAGES pages are rendered and at most MAX_CROPS findings get a close-up.
+render_pages reports when a limit was hit.
 """
 import base64
 
 import fitz
 
+MAX_PAGES = 10        # pages with findings that are rendered per request
+MAX_CROPS = 50        # findings that get a close-up per request
 ZOOM = 1.5
 CROP_ZOOM = 4.0       # close-ups are rendered sharper than the page image
 CROP_PAD = 8.0        # points of context around a finding in a close-up
@@ -70,18 +76,30 @@ def marked_crop(data, number, finding, area, matrix):
 
 
 def render_pages(data, findings):
-    """Return one dict per page that has findings: sizes, both images and close-ups."""
+    """Return (pages, truncated).
+
+    pages has one dict per rendered page that has findings: sizes, both images and close-ups.
+    truncated is True when MAX_PAGES or MAX_CROPS cut the result short. Findings past MAX_CROPS
+    keep their entry with "crop": None; findings on pages past MAX_PAGES are left out.
+    """
     doc = fitz.open(stream=data, filetype="pdf")
     matrix = fitz.Matrix(ZOOM, ZOOM)
     crop_matrix = fitz.Matrix(CROP_ZOOM, CROP_ZOOM)
     pages = []
+    crops_left = MAX_CROPS
+    numbers = sorted({f["page"] for f in findings})
+    truncated = len(numbers) > MAX_PAGES
     try:
-        for number in sorted({f["page"] for f in findings}):
+        for number in numbers[:MAX_PAGES]:
             page = doc[number - 1]
             items = [(i, f) for i, f in enumerate(findings) if f["page"] == number]
             drawable = [(i, f) for i, f in items if is_on_page(f, page)]
             column = text_column(page)
-            areas = {i: crop_rect(f["bbox"], page.rect, column) for i, f in drawable}
+            cropped = drawable[:crops_left]
+            crops_left -= len(cropped)
+            if len(cropped) < len(drawable):
+                truncated = True
+            areas = {i: crop_rect(f["bbox"], page.rect, column) for i, f in cropped}
             normal = page.get_pixmap(matrix=matrix, alpha=False)
             crops_normal = {i: page.get_pixmap(matrix=crop_matrix, clip=a, alpha=False)
                             for i, a in areas.items()}
@@ -110,4 +128,4 @@ def render_pages(data, findings):
             })
     finally:
         doc.close()
-    return pages
+    return pages, truncated

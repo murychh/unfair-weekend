@@ -128,10 +128,10 @@ async def preview(file: UploadFile = File(...)):
     data = await read_upload(file)
     try:
         findings = detector.scan_pdf(data)
-        pages = preview_module.render_pages(data, findings)
+        pages, truncated = preview_module.render_pages(data, findings)
     except Exception:
         raise HTTPException(400, MSG_DAMAGED)
-    return {"pages": pages}
+    return {"pages": pages, "truncated": truncated}
 
 
 @app.post("/api/clean")

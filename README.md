@@ -45,11 +45,17 @@ Open http://127.0.0.1:8000 and drop a PDF on the page.
 
 `notes` lists extra remarks, for example pages without a text layer that weren't checked.
 
-`POST /api/preview` takes the same upload and returns `{ "pages": [ { "page", "width", "height", "outside", "normal", "marked", "findings" } ] }`
+`POST /api/preview` takes the same upload and returns `{ "pages": [ { "page", "width", "height", "outside", "normal", "marked", "findings" } ], "truncated" }`
 for each page with findings. `normal` and `marked` are .png data URLs: the page as a person sees it, and the
 same page with a red outline and light fill around each hidden finding (no text is drawn). `findings` lists, for
 each finding, its `index` in the scan result and a `crop` with a close-up `box` (page points) and `normal` and
 `marked` close-up images. The browser draws the hidden text itself, so any script displays correctly.
+
+To keep the response small and fast, the work is limited (`MAX_PAGES` and `MAX_CROPS` in `preview.py`):
+at most 10 pages are rendered and at most 50 findings get a close-up per request. When a limit is hit,
+`truncated` is `true`. Findings past the close-up limit keep their entry in `findings` with `"crop": null`.
+Findings on pages past the page limit are left out of `pages`, but they are still in the scan result.
+Below the limits `truncated` is `false`. The app shows a short note when `truncated` is `true`.
 
 The "Show on page" button in the app uses this. It opens two page images side by side: "What a person sees"
 and "What the AI reads". On the second one the browser draws a numbered selection-blue box over each hidden
