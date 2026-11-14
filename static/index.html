@@ -291,9 +291,19 @@ function showViewPage(index) {
   const note = document.getElementById("viewnote");
   note.className = "meta";
   note.textContent = page.outside ? "Text outside the page can't be shown here." : "";
+  for (const shot of document.querySelectorAll(".shot")) shot.style.aspectRatio = page.width + " / " + page.height;
   updateMark();
   updateZoom();
 }
+
+// Size is known from the page data, so labels don't depend on the images having loaded. Re-run on load and resize.
+function relayout() {
+  if (viewer.hidden || !previewPages) return;
+  placeLabels(document.getElementById("overlay"));
+  for (const wrap of document.querySelectorAll("#zoomright .crop")) placeLabels(wrap);
+}
+window.addEventListener("resize", relayout);
+for (const id of ["imgnormal", "imgmarked"]) document.getElementById(id).addEventListener("load", relayout);
 
 function updateMark() {
   const page = previewPages && previewPages[viewIndex];
@@ -340,6 +350,7 @@ function updateZoom() {
     wrap.className = "crop";
     const img = document.createElement("img");
     img.src = url;
+    img.addEventListener("load", relayout);
     wrap.appendChild(img);
     if (marked) {
       const el = makeMark(shown, crop.box, true, false);
@@ -361,8 +372,8 @@ async function openViewer(finding) {
   if (!selected) selected = currentFindings[0];
   markSelected();
   const index = previewPages.findIndex((p) => p.page === selected.page);
-  showViewPage(index < 0 ? 0 : index);
   viewer.hidden = false;
+  showViewPage(index < 0 ? 0 : index);
   syncButton();
 }
 
