@@ -6,6 +6,7 @@ Three rules are applied to every text span:
   c. the span lies outside the visible page area
 """
 import re
+import unicodedata
 from bisect import bisect_left, bisect_right
 
 import fitz  # PyMuPDF
@@ -77,7 +78,8 @@ def group_by_baseline(flagged):
     LINE_TOLERANCE x font size. Consecutive lines form one block when they are
     vertically adjacent (gap < BLOCK_GAP x font size) and have the same reasons.
     Returns a list of blocks; a block is a list of lines; a line is a list of
-    (span, reasons) sorted by x.
+    (span, reasons) in reading order (left to right, or right to left for
+    right-to-left text).
     """
     lines = []
     for item in sorted(flagged, key=lambda it: it[0]["origin"][1]):
@@ -86,7 +88,7 @@ def group_by_baseline(flagged):
             lines[-1].append(item)
         else:
             lines.append([item])
-    lines = [sorted(line, key=lambda it: it[0]["bbox"][0]) for line in lines]
+    lines = [sort_line(line) for line in lines]
 
     blocks = []
     for line in lines:
@@ -95,6 +97,26 @@ def group_by_baseline(flagged):
         else:
             blocks.append([line])
     return blocks
+
+
+def is_rtl(spans):
+    """True when right-to-left letters (Arabic, Hebrew, ...) dominate the spans' text.
+
+    Arabic is often extracted as presentation forms, so the text is
+    NFKC-normalised first.
+    """
+    text = unicodedata.normalize("NFKC", "".join(s["text"] for s in spans))
+    rtl = sum(1 for c in text if unicodedata.bidirectional(c) in ("R", "AL"))
+    ltr = sum(1 for c in text if unicodedata.bidirectional(c) == "L")
+    return rtl > ltr
+
+
+def sort_line(line):
+    """Order the spans of one line by x: left to right, or right to left for RTL text."""
+    ordered = sorted(line, key=lambda it: it[0]["bbox"][0])
+    if is_rtl([span for span, _ in ordered]):
+        ordered.reverse()
+    return ordered
 
 
 def line_reasons(line):
@@ -374,10 +396,11 @@ def color_distance(a, b):
 # Output
 
 def join_spans(spans):
-    """Join spans (sorted by x) into text; add a space only across a wide gap."""
+    """Join spans (in reading order) into text; add a space only across a wide gap."""
+    rtl = is_rtl(spans)
     text = spans[0]["text"]
     for prev, span in zip(spans, spans[1:]):
-        gap = span["bbox"][0] - prev["bbox"][2]
+        gap = prev["bbox"][0] - span["bbox"][2] if rtl else span["bbox"][0] - prev["bbox"][2]
         if gap > GAP_FACTOR * span["size"] and not (text[-1:].isspace() or span["text"][:1].isspace()):
             text += " "
         text += span["text"]

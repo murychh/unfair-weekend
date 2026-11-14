@@ -553,7 +553,7 @@ def test_multilanguage_hidden_text_keeps_every_script_in_logical_order():
     text = "\n".join(f["text"] for f in result["findings"]).replace("\u00a0", " ")
     for sample in (
         "Ąžuolas Šimkūnas", "Иван Петров", "Ανώτερος μηχανικός",
-        "ﻣﻬﻨﺪﺱ", "בכיר אבטחה מהנדס", "वरिष्ठ सुरक्षा इंजीनियर",
+        "ﻣﻬﻨﺪﺱ ﺃﻣﻦ ﺃﻭﻝ ﻓﻲ ﺟﻮﺟﻞ", "מהנדס אבטחה בכיר", "वरिष्ठ सुरक्षा इंजीनियर",
         "高级安全工程师", "シニアセキュリティエンジニア", "선임 보안 엔지니어",
         "Google • 2019 – 2024", "✓",
     ):
