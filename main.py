@@ -8,6 +8,7 @@ import fitz
 
 import cleaner
 import detector
+import preview as preview_module
 
 MAX_UPLOAD_BYTES = 10 * 1024 * 1024
 STATIC_DIR = Path(__file__).parent / "static"
@@ -119,6 +120,18 @@ async def scan(file: UploadFile = File(...)):
         "findings": findings,
         "notes": notes,
     }
+
+
+@app.post("/api/preview")
+async def preview(file: UploadFile = File(...)):
+    """Return PNG images (as data URLs) of every page that has findings."""
+    data = await read_upload(file)
+    try:
+        findings = detector.scan_pdf(data)
+        pages = preview_module.render_pages(data, findings)
+    except Exception:
+        raise HTTPException(400, MSG_DAMAGED)
+    return {"pages": pages}
 
 
 @app.post("/api/clean")

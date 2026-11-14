@@ -33,6 +33,10 @@ Open http://127.0.0.1:8000 and drop a PDF on the page.
 
 `notes` lists extra remarks, for example pages without a text layer that weren't checked.
 
+`POST /api/preview` takes the same upload and returns `{ "pages": [ { "page", "width", "height", "outside", "normal", "marked" } ] }`
+for each page with findings. `normal` and `marked` are .png data URLs: the page as a person sees it, and the
+same page with every hidden finding drawn in red.
+
 `POST /api/clean` takes the same upload and returns a new PDF with the hidden text removed
 (redactions limited to the flagged spans, no visible fill; the original is never modified).
 Before returning the file the server re-scans it (must give zero findings) and checks that the

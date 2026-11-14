@@ -40,6 +40,19 @@
   .checks li::before { content: "\2713"; font-weight: 700; margin-right: 8px; }
   .buttons { display: flex; gap: 8px; }
   .buttons button { flex: 1 1 0; min-width: 0; }
+  #findings > li { cursor: pointer; }
+  #findings > li.selected .text { outline: 2px solid #b91c1c; }
+  #viewer { margin-top: 16px; padding-top: 16px; border-top: 1px solid #e3e6ec; }
+  .viewer-bar { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 12px; }
+  .pager { display: flex; align-items: center; gap: 8px; }
+  .pager button { padding: 4px 12px; }
+  .pair { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .pane h3 { margin: 0 0 6px; font-size: 14px; font-weight: 500; color: #5b6577; }
+  .shot { position: relative; line-height: 0; border: 1px solid #e3e6ec; }
+  .shot img { width: 100%; height: auto; display: block; }
+  .mark { position: absolute; border: 2px solid #b91c1c; background: rgba(185, 28, 28, .25);
+          box-shadow: 0 0 0 3px rgba(185, 28, 28, .35); pointer-events: none; }
+  @media (max-width: 640px) { .pair { grid-template-columns: 1fr; } }
   [hidden] { display: none !important; }
   button { background: #2563eb; color: #fff; border: 1px solid #2563eb; border-radius: 8px; padding: 8px 16px; font-size: 15px; cursor: pointer; }
   button.secondary { background: #fff; color: #2563eb; }
@@ -69,7 +82,23 @@
       <div id="cleanmsg"></div>
       <div id="notes"></div>
     </div>
+    <div id="viewer" hidden>
+      <div class="viewer-bar">
+        <div class="pager">
+          <button id="prevpage" class="secondary" type="button" aria-label="Previous page">&larr;</button>
+          <span id="pagelabel"></span>
+          <button id="nextpage" class="secondary" type="button" aria-label="Next page">&rarr;</button>
+        </div>
+        <button id="closeview" class="secondary" type="button">Close</button>
+      </div>
+      <div class="pair">
+        <div class="pane"><h3>What a person sees</h3><div class="shot"><img id="imgnormal" alt="The page as a person sees it"></div></div>
+        <div class="pane"><h3>What the AI reads</h3><div class="shot"><img id="imgmarked" alt="The page with hidden text marked in red"><div class="mark" id="mark" hidden></div></div></div>
+      </div>
+      <div id="viewnote" class="meta"></div>
+    </div>
     <div id="actions" class="buttons" hidden>
+      <button id="showbtn" class="secondary" type="button" hidden>Show on page</button>
       <button id="origbtn" class="secondary" type="button" hidden>Download original</button>
       <button id="cleanbtn" type="button" hidden>Download clean copy</button>
       <button id="okbtn" type="button" hidden>Download clean copy</button>
@@ -112,6 +141,10 @@ async function clientError(file) {
 
 let currentFile = null;
 let hiddenLineCount = 0;
+let currentFindings = [];
+let previewPages = null;
+let viewIndex = 0;
+let selected = null;
 
 function baseName(file) {
   return file.name.replace(/\.pdf$/i, "");
@@ -146,12 +179,91 @@ async function upload(file) {
       return;
     }
     currentFile = file;
+    currentFindings = result.findings;
+    previewPages = null;
     hiddenLineCount = result.findings.reduce((sum, f) => sum + f.lines, 0);
     render(result);
   } catch (err) {
     showCard(file.name, null, "Couldn't reach the server", true);
   }
 }
+
+// Side-by-side view: the page as a person sees it, and as the AI reads it.
+const viewer = document.getElementById("viewer");
+
+async function loadPreview() {
+  if (previewPages) return true;
+  const note = document.getElementById("viewnote");
+  viewer.hidden = false;
+  note.className = "meta";
+  note.textContent = "Loading...";
+  const body = new FormData();
+  body.append("file", currentFile);
+  try {
+    const response = await fetch("/api/preview", { method: "POST", body });
+    const result = await response.json();
+    if (!response.ok) throw new Error();
+    previewPages = result.pages;
+    return true;
+  } catch (err) {
+    note.className = "error";
+    note.textContent = "Couldn't load the page view";
+    return false;
+  }
+}
+
+function showViewPage(index) {
+  viewIndex = Math.max(0, Math.min(index, previewPages.length - 1));
+  const page = previewPages[viewIndex];
+  document.getElementById("imgnormal").src = page.normal;
+  document.getElementById("imgmarked").src = page.marked;
+  document.getElementById("pagelabel").textContent = "Page " + page.page + " of " + previewPages.length;
+  document.getElementById("prevpage").disabled = viewIndex === 0;
+  document.getElementById("nextpage").disabled = viewIndex === previewPages.length - 1;
+  document.getElementById("prevpage").hidden = previewPages.length < 2;
+  document.getElementById("nextpage").hidden = previewPages.length < 2;
+  const note = document.getElementById("viewnote");
+  note.className = "meta";
+  note.textContent = page.outside ? "Text outside the page can't be shown here." : "";
+  updateMark();
+}
+
+function updateMark() {
+  const mark = document.getElementById("mark");
+  const page = previewPages && previewPages[viewIndex];
+  mark.hidden = true;
+  if (!page || !selected || selected.page !== page.page) return;
+  const [x0, y0, x1, y1] = selected.bbox;
+  const left = Math.max(x0, 0), top = Math.max(y0, 0);
+  const right = Math.min(x1, page.width), bottom = Math.min(y1, page.height);
+  if (right <= left || bottom <= top) return;
+  mark.style.left = (left / page.width * 100) + "%";
+  mark.style.top = (top / page.height * 100) + "%";
+  mark.style.width = ((right - left) / page.width * 100) + "%";
+  mark.style.height = ((bottom - top) / page.height * 100) + "%";
+  mark.hidden = false;
+}
+
+async function openViewer(page) {
+  if (!currentFile || !(await loadPreview())) return;
+  const index = previewPages.findIndex((p) => p.page === page);
+  showViewPage(index < 0 ? 0 : index);
+  viewer.hidden = false;
+}
+
+function selectFinding(finding, li) {
+  selected = finding;
+  for (const item of document.querySelectorAll("#findings > li")) item.classList.remove("selected");
+  li.classList.add("selected");
+  openViewer(finding.page);
+}
+
+document.getElementById("showbtn").addEventListener("click", () => {
+  openViewer(currentFindings.length ? currentFindings[0].page : 1);
+});
+document.getElementById("closeview").addEventListener("click", () => { viewer.hidden = true; });
+document.getElementById("prevpage").addEventListener("click", () => showViewPage(viewIndex - 1));
+document.getElementById("nextpage").addEventListener("click", () => showViewPage(viewIndex + 1));
 
 document.getElementById("cleanbtn").addEventListener("click", cleanCopy);
 document.getElementById("origbtn").addEventListener("click", () => {
@@ -213,7 +325,7 @@ function showCard(name, badge, message, isError) {
   msg.textContent = message || "";
   msg.className = isError ? "error" : "";
   document.getElementById("findings").innerHTML = "";
-  for (const id of ["okchecks", "actions", "origbtn", "cleanbtn", "okbtn"]) {
+  for (const id of ["okchecks", "actions", "showbtn", "origbtn", "cleanbtn", "okbtn", "viewer"]) {
     document.getElementById(id).hidden = true;
   }
   if (isError) {
@@ -222,6 +334,7 @@ function showCard(name, badge, message, isError) {
   }
   document.getElementById("cleanmsg").textContent = "";
   document.getElementById("notes").innerHTML = "";
+  selected = null;
 }
 
 function stripPeriod(text) {
@@ -235,6 +348,7 @@ function render(result) {
   badge.textContent = found ? "Hidden text" : "Clean";
   badge.className = "badge " + (found ? "found" : "clean");
   document.getElementById("actions").hidden = false;
+  document.getElementById("showbtn").hidden = !found;
   document.getElementById("origbtn").hidden = !found;
   document.getElementById("cleanbtn").hidden = !found;
   document.getElementById("okbtn").hidden = found;
@@ -271,6 +385,7 @@ function render(result) {
       reasons.appendChild(item);
     }
     li.append(text, meta, reasons);
+    li.addEventListener("click", () => selectFinding(f, li));
     if (f.note) {
       const note = document.createElement("div");
       note.className = "meta";
