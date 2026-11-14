@@ -44,7 +44,6 @@
   #findings > li.selected .text { outline: 2px solid #b91c1c; }
   #viewer { margin-top: 16px; padding-top: 16px; border-top: 1px solid #e3e6ec; }
   .viewer-bar { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 12px; }
-  #closeview { margin-left: auto; }
   .pager { display: flex; align-items: center; gap: 8px; }
   .pager button { padding: 4px 12px; }
   .pair { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
@@ -53,14 +52,17 @@
   .shot { position: relative; overflow: hidden; line-height: 0; border: 1px solid #e3e6ec; container-type: inline-size; }
   .shot img { width: 100%; height: auto; display: block; }
   .crop { position: relative; }
-  .mark { position: absolute; border: 2px solid #b91c1c; background: rgba(185, 28, 28, .25);
-          box-shadow: 0 0 0 3px rgba(185, 28, 28, .35); pointer-events: none; }
-  /* Hidden text is real HTML so the browser picks fonts for any script. */
-  .htext { position: absolute; color: #b91c1c; font-family: system-ui, sans-serif; line-height: 1.15;
-           white-space: pre; unicode-bidi: plaintext; pointer-events: none; }
-  .htext.big { white-space: pre-wrap; overflow-wrap: anywhere; font-size: 14px; line-height: 1.3; background: rgba(255, 255, 255, .9); padding: 1px 3px; box-sizing: border-box; }
+  .mark { position: absolute; box-sizing: border-box; border: 2px solid #b91c1c; pointer-events: none; }
+  .mark.sel { border-width: 4px; background: rgba(185, 28, 28, .12); }
+  .mark .num { position: absolute; left: -2px; bottom: 100%; margin-bottom: 1px; background: #b91c1c; color: #fff;
+               font: 600 11px/1 system-ui, sans-serif; padding: 2px 4px; border-radius: 3px; }
+  .mark.sel .num { left: -4px; }
+  .hidden-read { margin-top: 8px; color: #b91c1c; font-family: system-ui, sans-serif; font-size: 15px; line-height: 1.4;
+                 white-space: pre-wrap; overflow-wrap: anywhere; unicode-bidi: plaintext; }
   .plain { line-height: 1.3; color: #b91c1c; font-family: system-ui, sans-serif; white-space: pre-wrap;
            overflow-wrap: anywhere; unicode-bidi: plaintext; padding: 8px; border: 1px solid #e3e6ec; }
+  .fnum { display: inline-block; background: #b91c1c; color: #fff; font: 600 11px/1 system-ui, sans-serif;
+          padding: 2px 5px; border-radius: 3px; margin-right: 6px; }
   @media (max-width: 640px) { .pair { grid-template-columns: 1fr; } }
   [hidden] { display: none !important; }
   button { background: #2563eb; color: #fff; border: 1px solid #2563eb; border-radius: 8px; padding: 8px 16px; font-size: 15px; cursor: pointer; }
@@ -98,17 +100,16 @@
           <span id="pagelabel"></span>
           <button id="nextpage" class="secondary" type="button" aria-label="Next page">&rarr;</button>
         </div>
-        <button id="closeview" class="secondary" type="button">Close</button>
       </div>
       <div class="pair">
         <div class="pane"><h3>What a person sees</h3><div class="shot"><img id="imgnormal" alt="The page as a person sees it"></div></div>
-        <div class="pane"><h3>What the AI reads</h3><div class="shot"><img id="imgmarked" alt="The page with hidden text marked in red"><div class="mark" id="mark" hidden></div><div id="overlay"></div></div></div>
+        <div class="pane"><h3>What the AI reads</h3><div class="shot"><img id="imgmarked" alt="The page with hidden text marked in red"><div id="overlay"></div></div></div>
       </div>
       <div id="viewnote" class="meta"></div>
       <h3 class="zoomtitle">Zoomed in</h3>
       <div class="pair">
         <div class="pane"><h3>What a person sees</h3><div class="shot" id="zoomleft"></div></div>
-        <div class="pane"><h3>What the AI reads</h3><div class="shot" id="zoomright"></div></div>
+        <div class="pane"><h3>What the AI reads</h3><div class="shot" id="zoomright"></div><div id="zoomtext" class="hidden-read" dir="auto"></div></div>
       </div>
     </div>
     <div id="actions" class="buttons" hidden>
@@ -209,6 +210,7 @@ async function loadPreview() {
   if (previewPages) return true;
   const note = document.getElementById("viewnote");
   viewer.hidden = false;
+  syncButton();
   note.className = "meta";
   note.textContent = "Loading...";
   const body = new FormData();
@@ -222,17 +224,30 @@ async function loadPreview() {
   } catch (err) {
     note.className = "error";
     note.textContent = "Couldn't load the page view";
+    syncButton();
     return false;
   }
 }
 
 function pct(value) { return value * 100 + "%"; }
 
-function makeText(finding, className) {
+// A highlight box with its number, placed inside a container that shows `area` = [x0, y0, x1, y1] of the page.
+function makeMark(finding, area, selectedNow) {
+  const [ax0, ay0, ax1, ay1] = area;
+  const [x0, y0, x1, y1] = finding.bbox;
+  const left = Math.max(x0, ax0), top = Math.max(y0, ay0);
+  const right = Math.min(x1, ax1), bottom = Math.min(y1, ay1);
+  if (right <= left || bottom <= top) return null;
   const el = document.createElement("div");
-  el.className = className;
-  el.dir = "auto";
-  el.textContent = finding.text;
+  el.className = "mark" + (selectedNow ? " sel" : "");
+  el.style.left = pct((left - ax0) / (ax1 - ax0));
+  el.style.top = pct((top - ay0) / (ay1 - ay0));
+  el.style.width = pct((right - left) / (ax1 - ax0));
+  el.style.height = pct((bottom - top) / (ay1 - ay0));
+  const num = document.createElement("span");
+  num.className = "num";
+  num.textContent = currentFindings.indexOf(finding) + 1;
+  el.appendChild(num);
   return el;
 }
 
@@ -248,90 +263,60 @@ function showViewPage(index) {
   const note = document.getElementById("viewnote");
   note.className = "meta";
   note.textContent = page.outside ? "Text outside the page can't be shown here." : "";
-  // Hidden text over the right image, scaled with the image width.
-  const overlay = document.getElementById("overlay");
-  overlay.textContent = "";
-  for (const entry of page.findings) {
-    if (!entry.crop) continue;
-    const f = currentFindings[entry.index];
-    const [x0, y0] = f.bbox;
-    const el = makeText(f, "htext");
-    el.style.left = pct(Math.max(x0, 0) / page.width);
-    el.style.top = pct(Math.max(y0, 0) / page.height);
-    el.style.fontSize = "max(4px, calc(" + f.font_size + " / " + page.width + " * 100cqw))";
-    overlay.appendChild(el);
-  }
   updateMark();
   updateZoom();
 }
 
 function updateMark() {
-  const mark = document.getElementById("mark");
   const page = previewPages && previewPages[viewIndex];
-  mark.hidden = true;
-  if (!page || !selected || selected.page !== page.page) return;
-  const [x0, y0, x1, y1] = selected.bbox;
-  const left = Math.max(x0, 0), top = Math.max(y0, 0);
-  const right = Math.min(x1, page.width), bottom = Math.min(y1, page.height);
-  if (right <= left || bottom <= top) return;
-  mark.style.left = pct(left / page.width);
-  mark.style.top = pct(top / page.height);
-  mark.style.width = pct((right - left) / page.width);
-  mark.style.height = pct((bottom - top) / page.height);
-  mark.hidden = false;
-}
-
-// "Zoomed in": the same region of both pages, enlarged, with the hidden text at a readable size.
-function zoomPane(box, imageUrl, finding, withText, entry) {
-  box.textContent = "";
-  box.style.minHeight = "";
-  if (!imageUrl) {
-    if (withText) {
-      box.style.lineHeight = "normal";
-      box.appendChild(makeText(finding, "plain"));
-    } else {
-      const note = document.createElement("div");
-      note.className = "plain";
-      note.style.color = "#5b6577";
-      note.textContent = "This text is outside the page, so nobody can see it.";
-      box.appendChild(note);
-    }
-    return;
+  const overlay = document.getElementById("overlay");
+  overlay.textContent = "";
+  if (!page) return;
+  const area = [0, 0, page.width, page.height];
+  const chosen = selected || currentFindings[0];
+  for (const entry of page.findings) {
+    const f = currentFindings[entry.index];
+    const el = makeMark(f, area, f === chosen);
+    if (el) overlay.appendChild(el);
   }
-  box.style.lineHeight = "0";
-  const crop = document.createElement("div");
-  crop.className = "crop";
-  const img = document.createElement("img");
-  img.src = imageUrl;
-  crop.appendChild(img);
-  box.appendChild(crop);
-  if (!withText) return;
-  const [bx0, by0, bx1, by1] = entry.crop.box;
-  const [x0, y0] = finding.bbox;
-  const el = makeText(finding, "htext big");
-  el.style.left = pct((Math.max(x0, bx0) - bx0) / (bx1 - bx0));
-  el.style.top = pct((Math.max(y0, by0) - by0) / (by1 - by0));
-  el.style.right = "0";
-  crop.appendChild(el);
-  const fit = () => {
-    const height = Math.max(crop.offsetHeight, el.offsetTop + el.offsetHeight) + "px";
-    box.style.minHeight = height;
-    document.getElementById("zoomleft").style.minHeight = height;
-  };
-  img.addEventListener("load", fit);
-  fit();
 }
 
+// "Zoomed in": the same region of both pages, enlarged. The hidden text is shown under the right crop.
 function updateZoom() {
   const page = previewPages && previewPages[viewIndex];
   if (!page) return;
   const finding = selected || currentFindings[0];
-  const entry = page.findings.find((e) => currentFindings[e.index] === finding)
-    || page.findings[0];
+  const entry = page.findings.find((e) => currentFindings[e.index] === finding) || page.findings[0];
   const shown = currentFindings[entry.index];
+  const left = document.getElementById("zoomleft");
+  const right = document.getElementById("zoomright");
+  const text = document.getElementById("zoomtext");
+  left.textContent = "";
+  right.textContent = "";
+  text.textContent = shown.text;
   const crop = entry.crop;
-  zoomPane(document.getElementById("zoomleft"), crop && crop.normal, shown, false, entry);
-  zoomPane(document.getElementById("zoomright"), crop && crop.marked, shown, true, entry);
+  if (!crop) {
+    const note = document.createElement("div");
+    note.className = "plain";
+    note.style.color = "#5b6577";
+    note.textContent = "This text is outside the page, so nobody can see it.";
+    left.appendChild(note);
+    right.hidden = true;
+    return;
+  }
+  right.hidden = false;
+  for (const [box, url, marked] of [[left, crop.normal, false], [right, crop.marked, true]]) {
+    const wrap = document.createElement("div");
+    wrap.className = "crop";
+    const img = document.createElement("img");
+    img.src = url;
+    wrap.appendChild(img);
+    if (marked) {
+      const el = makeMark(shown, crop.box, true);
+      if (el) wrap.appendChild(el);
+    }
+    box.appendChild(wrap);
+  }
 }
 
 function markSelected() {
@@ -347,14 +332,20 @@ async function openViewer(finding) {
   const index = previewPages.findIndex((p) => p.page === selected.page);
   showViewPage(index < 0 ? 0 : index);
   viewer.hidden = false;
+  syncButton();
 }
 
 function selectFinding(finding) {
   openViewer(finding);
 }
 
-document.getElementById("showbtn").addEventListener("click", () => openViewer(null));
-document.getElementById("closeview").addEventListener("click", () => { viewer.hidden = true; });
+function syncButton() {
+  document.getElementById("showbtn").textContent = viewer.hidden ? "Show on page" : "Hide page view";
+}
+document.getElementById("showbtn").addEventListener("click", () => {
+  if (!viewer.hidden) { viewer.hidden = true; syncButton(); return; }
+  openViewer(null);
+});
 function changePage(step) {
   showViewPage(viewIndex + step);
   const page = previewPages[viewIndex];
@@ -431,6 +422,7 @@ function showCard(name, badge, message, isError) {
   for (const id of ["okchecks", "actions", "showbtn", "origbtn", "cleanbtn", "okbtn", "viewer"]) {
     document.getElementById(id).hidden = true;
   }
+  syncButton();
   if (isError) {
     badgeEl.textContent = "Can't check";
     badgeEl.className = "badge unchecked";
@@ -477,6 +469,9 @@ function render(result) {
     const text = document.createElement("div");
     text.className = "text";
     text.textContent = f.text;
+    const num = document.createElement("span");
+    num.className = "fnum";
+    num.textContent = result.findings.indexOf(f) + 1;
     const meta = document.createElement("div");
     meta.className = "meta heading";
     meta.textContent = "Page " + f.page + " \u00b7 " + f.lines + " hidden line" + (f.lines === 1 ? "" : "s");
@@ -488,6 +483,7 @@ function render(result) {
       reasons.appendChild(item);
     }
     li.append(text, meta, reasons);
+    meta.prepend(num);
     li.addEventListener("click", () => selectFinding(f));
     if (f.note) {
       const note = document.createElement("div");
