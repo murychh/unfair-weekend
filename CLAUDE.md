@@ -5,7 +5,7 @@ ClearRead is a FastAPI + PyMuPDF app that finds hidden text in .pdf resumes and 
 ## Rules
 
 - Never change detection or cleaning logic unless the task explicitly asks for it.
-- After every change, run the full pytest suite (`.venv/bin/python -m pytest`). All tests must pass. Then commit and push.
+- After every change, run the full pytest suite (`.venv/bin/python -m pytest` on macOS/Linux, `.venv\Scripts\python -m pytest` on Windows). All tests must pass. Then commit and push.
 - Keep requirements.txt pinned to exact versions and cross-platform (Windows, macOS, Linux). Use environment markers for platform-specific packages.
 - Test samples live in samples/.
 
