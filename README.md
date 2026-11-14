@@ -1,5 +1,7 @@
 # ClearRead
 
+Live demo: https://clearread-zq0c.onrender.com (the first load may take up to a minute)
+
 Finds text hidden inside PDF resumes: text a person cannot see on the page,
 but an AI screening tool reads after text extraction.
 
