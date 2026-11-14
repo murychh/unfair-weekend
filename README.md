@@ -2,7 +2,7 @@
 
 Live demo: https://clearread-zq0c.onrender.com (the first load may take up to a minute)
 
-Finds text hidden inside PDF resumes: text a person cannot see on the page,
+Finds text hidden inside .pdf resumes: text a person can't see on the page,
 but an AI screening tool reads after text extraction.
 
 You upload a .pdf resume. ClearRead lists the hidden text it finds, shows where it sits on the
@@ -41,7 +41,7 @@ On Windows (Command Prompt or PowerShell):
     pip install -r requirements.txt
     python -m uvicorn main:app --port 8000
 
-Open http://127.0.0.1:8000 and drop a PDF on the page.
+Open http://127.0.0.1:8000 and drop a .pdf on the page.
 
 To run the tests, install the development requirements instead (they include everything above):
 
@@ -66,7 +66,7 @@ To run the tests, install the development requirements instead (they include eve
 
 ## API
 
-`POST /api/scan` with a multipart field `file` (PDF, up to 10 MB and 50 pages) returns:
+`POST /api/scan` with a multipart field `file` (.pdf, up to 10 MB and 50 pages) returns:
 
     { "filename", "status": "clean" | "hidden_text_found",
       "findings": [ { "page", "text", "lines", "reasons", "note", "bbox", "font_size", "color" } ],
@@ -78,7 +78,7 @@ Files with more than 50 pages (`MAX_PAGES` in `main.py`) are rejected with HTTP 
 "The file has more than 50 pages." before anything is scanned. This applies to `/api/scan`, `/api/preview`
 and `/api/clean`.
 
-All PDF work (checking the upload, scanning, previews and cleaning) runs on one worker thread, because PyMuPDF
+All .pdf work (checking the upload, scanning, previews and cleaning) runs on one worker thread, because PyMuPDF
 doesn't support running on several threads at once. The event loop stays free, so the page and other requests
 still answer while a large file is processed. Several uploads at the same time are processed one after another.
 
@@ -101,7 +101,7 @@ arrows, to change the selection. Under the pages, "Zoomed in" shows a close-up o
 versions, with only that finding highlighted, and the hidden text itself below it. Closing the view clears
 the selection.
 
-`POST /api/clean` takes the same upload and returns a new PDF with the hidden text removed
+`POST /api/clean` takes the same upload and returns a new .pdf with the hidden text removed
 (redactions limited to the flagged spans, no visible fill; the original is never modified).
 Before returning the file the server re-scans it (must give zero findings) and checks that the
 visible text is unchanged. If a check fails it returns HTTP 400 saying which one.
