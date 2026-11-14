@@ -203,7 +203,7 @@ def test_empty_file_is_rejected():
 def test_non_pdf_is_rejected():
     response = post_bytes("a.pdf", b"not a pdf")
     assert response.status_code == 400
-    assert response.json()["detail"] == "This .pdf file can't be opened. It may be damaged or renamed from another file type."
+    assert response.json()["detail"] == "This .pdf file can't be opened. It may be damaged or renamed."
 
 
 def test_large_non_pdf_says_wrong_type_not_too_big():
@@ -215,7 +215,7 @@ def test_large_non_pdf_says_wrong_type_not_too_big():
 def test_large_renamed_file_says_damaged_not_too_big():
     response = post_bytes("movie.pdf", b"\x00\x00\x00\x14ftypqt  " + b"\x00" * (12 * 1024 * 1024))
     assert response.status_code == 400
-    assert response.json()["detail"] == "This .pdf file can't be opened. It may be damaged or renamed from another file type."
+    assert response.json()["detail"] == "This .pdf file can't be opened. It may be damaged or renamed."
 
 
 @pytest.mark.parametrize("name, message", [
@@ -253,13 +253,13 @@ def test_png_is_rejected():
     png = b"\x89PNG\r\n\x1a\n" + b"\x00" * 64
     response = post_bytes("image.pdf", png)
     assert response.status_code == 400
-    assert response.json()["detail"] == "This .pdf file can't be opened. It may be damaged or renamed from another file type."
+    assert response.json()["detail"] == "This .pdf file can't be opened. It may be damaged or renamed."
 
 
 def test_truncated_pdf_is_rejected_cleanly():
     response = post_bytes("broken.pdf", b"%PDF-1.7\n1 0 obj <<")
     assert response.status_code == 400
-    assert response.json()["detail"] == "This .pdf file can't be opened. It may be damaged or renamed from another file type."
+    assert response.json()["detail"] == "This .pdf file can't be opened. It may be damaged or renamed."
 
 
 def test_encrypted_pdf_is_rejected():
@@ -393,7 +393,7 @@ def test_clean_rejects_bad_uploads_like_scan():
     response = client.post("/api/clean", files={"file": ("a.pdf", b"", "application/pdf")})
     assert (response.status_code, response.json()["detail"]) == (400, "The file is empty.")
     response = client.post("/api/clean", files={"file": ("a.pdf", b"not a pdf", "application/pdf")})
-    assert (response.status_code, response.json()["detail"]) == (400, "This .pdf file can't be opened. It may be damaged or renamed from another file type.")
+    assert (response.status_code, response.json()["detail"]) == (400, "This .pdf file can't be opened. It may be damaged or renamed.")
     response = client.post("/api/clean", files={"file": ("a.png", b"x", "image/png")})
     assert (response.status_code, response.json()["detail"]) == (400, "Only .pdf files are supported. This is a .png file.")
 
@@ -427,7 +427,7 @@ def test_truncated_pdf_says_it_cannot_be_opened():
     for cut in (len(data) // 2, len(data) - 60):
         response = post_bytes("cut.pdf", data[:cut])
         assert response.status_code == 400
-        assert response.json()["detail"] == "This .pdf file can't be opened. It may be damaged or renamed from another file type."
+        assert response.json()["detail"] == "This .pdf file can't be opened. It may be damaged or renamed."
 
 
 def test_no_extension_message():

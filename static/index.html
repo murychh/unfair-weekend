@@ -36,7 +36,7 @@
 <body>
 <main>
   <h1>ClearRead</h1>
-  <p class="sub">Find text in a résumé that people can't see but AI screening tools can read.</p>
+  <p class="sub">Find text in a resume that people can't see but AI screening tools can read.</p>
 
   <div id="drop">Drop a .pdf file here or click to choose one</div>
   <input id="picker" type="file" accept="application/pdf" hidden>
@@ -85,7 +85,7 @@ async function clientError(file) {
   }
   const head = await file.slice(0, 1024).text();
   if (!head.trimStart().startsWith("%PDF-")) {
-    return "This .pdf file can't be opened. It may be damaged or renamed from another file type.";
+    return "This .pdf file can't be opened. It may be damaged or renamed.";
   }
   if (file.size > MAX_BYTES) return "The file is larger than 10 MB.";
   return null;

@@ -19,7 +19,7 @@ SIGNATURE_BYTES = 1024
 MSG_TOO_BIG = "The file is larger than 10 MB."
 MSG_EMPTY = "The file is empty."
 MSG_NO_EXTENSION = "Only .pdf files are supported. This file has no extension."
-MSG_DAMAGED = "This .pdf file can't be opened. It may be damaged or renamed from another file type."
+MSG_DAMAGED = "This .pdf file can't be opened. It may be damaged or renamed."
 MSG_ENCRYPTED = "This .pdf file is password-protected. Remove the password and upload it again."
 MSG_NO_TEXT = "No text layer found. This looks like a scanned image."
 
