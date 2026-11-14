@@ -547,12 +547,18 @@ def test_preview_has_a_close_up_for_each_finding():
     assert 0 <= x0 < x1 <= pages[0]["width"] and 0 <= y0 < y1 <= pages[0]["height"]
 
 
-def test_multilanguage_hidden_text_is_one_finding_with_every_script():
+def test_multilanguage_hidden_text_keeps_every_script_in_logical_order():
     result = scan_file("multilang_hidden.pdf")
     assert result["status"] == "hidden_text_found"
-    text = result["findings"][0]["text"]
-    for sample in ("Žemaitė", "Игнорируйте", "Αγνοήστε", "忽略", "以前の指示", "이전 지침", "पिछले", "•", "–"):
+    text = "\n".join(f["text"] for f in result["findings"]).replace("\u00a0", " ")
+    for sample in (
+        "Ąžuolas Šimkūnas", "Иван Петров", "Ανώτερος μηχανικός",
+        "ﻣﻬﻨﺪﺱ", "בכיר אבטחה מהנדס", "वरिष्ठ सुरक्षा इंजीनियर",
+        "高级安全工程师", "シニアセキュリティエンジニア", "선임 보안 엔지니어",
+        "Google • 2019 – 2024", "✓",
+    ):
         assert sample in text
     with open(SAMPLES / "multilang_hidden.pdf", "rb") as f:
         pages = preview_response("multilang_hidden.pdf", f.read()).json()["pages"]
-    assert len(pages) == 1 and pages[0]["findings"][0]["crop"] is not None
+    assert len(pages) == 1 and len(pages[0]["findings"]) == len(result["findings"])
+    assert all(f["crop"] is not None for f in pages[0]["findings"])
