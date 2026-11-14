@@ -19,15 +19,20 @@
   .badge { color: #fff; padding: 4px 12px; border-radius: 999px; font-size: 14px; white-space: nowrap; }
   .clean { background: #15803d; }
   .found { background: #b91c1c; }
-  ul { list-style: none; padding: 0; margin: 16px 0 0; }
-  li { border-top: 1px solid #e3e6ec; padding: 12px 0; }
+  #findings { list-style: none; padding: 0; margin: 16px 0 0; }
+  #findings > li { border-top: 1px solid #e3e6ec; padding: 12px 0; }
   .text { white-space: pre-wrap; font-family: ui-monospace, Menlo, monospace; background: #fef2f2; padding: 6px 8px;
           border-radius: 6px; word-break: break-word; }
   .meta { color: #5b6577; font-size: 14px; margin-top: 6px; }
   .error { color: #b91c1c; }
   .ok { color: #15803d; }
   #cleanbar { margin-top: 16px; display: none; }
-  .buttons { display: flex; flex-wrap: wrap; gap: 8px; }
+  .reasons { margin: 4px 0 0; padding-left: 20px; font-size: 14px; color: #5b6577; }
+  .checks { list-style: none; margin: 12px 0 0; padding: 0; color: #15803d; }
+  .checks li { padding: 2px 0; }
+  .checks li::before { content: "\2713"; font-weight: 700; margin-right: 8px; }
+  .buttons { display: flex; gap: 8px; }
+  .buttons button { flex: 1 1 0; min-width: 0; }
   button { background: #2563eb; color: #fff; border: 1px solid #2563eb; border-radius: 8px; padding: 8px 16px; font-size: 15px; cursor: pointer; }
   button.secondary { background: #fff; color: #2563eb; }
   button:disabled { opacity: .6; cursor: default; }
@@ -50,8 +55,8 @@
     <ul id="findings"></ul>
     <div id="cleanbar">
       <div class="buttons">
-        <button id="cleanbtn" type="button">Download clean copy</button>
         <button id="origbtn" class="secondary" type="button">Download original</button>
+        <button id="cleanbtn" type="button">Download clean copy</button>
       </div>
       <div id="cleanmsg"></div>
     </div>
@@ -157,9 +162,20 @@ async function cleanCopy() {
       return;
     }
     saveBlob(await response.blob(), baseName(currentFile) + "_clean.pdf");
-    msg.className = "ok";
-    msg.textContent = "Removed " + hiddenLineCount + " hidden " + (hiddenLineCount === 1 ? "line" : "lines") +
-      ". Clean copy re-checked: no hidden text left, visible text unchanged.";
+    msg.className = "";
+    msg.textContent = "";
+    const checks = document.createElement("ul");
+    checks.className = "checks";
+    for (const line of [
+      "Removed " + hiddenLineCount + " hidden " + (hiddenLineCount === 1 ? "line" : "lines"),
+      "Re-checked: no hidden text left",
+      "Visible text unchanged",
+    ]) {
+      const item = document.createElement("li");
+      item.textContent = line;
+      checks.appendChild(item);
+    }
+    msg.appendChild(checks);
   } catch (err) {
     msg.className = "error";
     msg.textContent = "Could not reach the server";
@@ -197,8 +213,15 @@ function render(result) {
     text.textContent = f.text;
     const meta = document.createElement("div");
     meta.className = "meta";
-    meta.textContent = "Page " + f.page + " - " + f.lines + " hidden line" + (f.lines === 1 ? "" : "s") + " - " + f.reasons.join("; ");
-    li.append(text, meta);
+    meta.textContent = "Page " + f.page + " \u00b7 " + f.lines + " hidden line" + (f.lines === 1 ? "" : "s");
+    const reasons = document.createElement("ul");
+    reasons.className = "reasons";
+    for (const reason of f.reasons) {
+      const item = document.createElement("li");
+      item.textContent = reason;
+      reasons.appendChild(item);
+    }
+    li.append(text, meta, reasons);
     if (f.note) {
       const note = document.createElement("div");
       note.className = "meta";
