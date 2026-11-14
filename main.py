@@ -1,3 +1,5 @@
+import asyncio
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from urllib.parse import quote
 
@@ -11,9 +13,20 @@ import detector
 import preview as preview_module
 
 MAX_UPLOAD_BYTES = 10 * 1024 * 1024
+MAX_PAGES = 50
 STATIC_DIR = Path(__file__).parent / "static"
 
 app = FastAPI(title="ClearRead")
+
+# PyMuPDF doesn't support running on several threads at once
+# (https://pymupdf.readthedocs.io/en/latest/recipes-multiprocessing.html), so all PDF work goes through
+# this single worker thread. It keeps the event loop free for other requests while one file is processed.
+PDF_WORKER = ThreadPoolExecutor(max_workers=1, thread_name_prefix="pdf-worker")
+
+
+async def run_pdf_work(func, *args):
+    """Run func(*args) on the single PDF worker thread and wait for it without blocking the event loop."""
+    return await asyncio.get_running_loop().run_in_executor(PDF_WORKER, func, *args)
 
 
 SIGNATURE_BYTES = 1024
@@ -23,6 +36,7 @@ MSG_NO_EXTENSION = "Only .pdf files are supported. This file has no extension."
 MSG_DAMAGED = "This .pdf file can't be opened. It may be damaged or renamed."
 MSG_ENCRYPTED = "This .pdf file is password-protected. Remove the password and upload it again."
 MSG_NO_TEXT = "No text layer found. This looks like a scanned image."
+MSG_TOO_MANY_PAGES = f"The file has more than {MAX_PAGES} pages."
 
 
 def msg_wrong_extension(name):
@@ -54,6 +68,8 @@ def validate_upload(data):
     try:
         if doc.needs_pass:
             raise HTTPException(400, MSG_ENCRYPTED)
+        if doc.page_count > MAX_PAGES:
+            raise HTTPException(400, MSG_TOO_MANY_PAGES)
         if not has_text_layer(doc):
             raise HTTPException(400, MSG_NO_TEXT)
     except HTTPException:
@@ -89,6 +105,16 @@ def scan_notes(data):
     return [f"Pages {pages} have no text layer and weren't checked."]
 
 
+def scan_with_notes(data):
+    """Findings and notes for one file (runs on the PDF worker thread)."""
+    return detector.scan_pdf(data), scan_notes(data)
+
+
+def preview_pages(data):
+    """Page images for one file (runs on the PDF worker thread)."""
+    return preview_module.render_pages(data, detector.scan_pdf(data))
+
+
 async def read_upload(file):
     """Read an upload and validate it in the fixed order; return its bytes."""
     # Check order: empty, wrong name / not a PDF (first bytes only), too big, then the rest.
@@ -102,7 +128,7 @@ async def read_upload(file):
     data = head + await file.read(MAX_UPLOAD_BYTES + 1 - len(head))
     if len(data) > MAX_UPLOAD_BYTES:
         raise HTTPException(413, MSG_TOO_BIG)
-    validate_upload(data)
+    await run_pdf_work(validate_upload, data)
     return data
 
 
@@ -110,8 +136,7 @@ async def read_upload(file):
 async def scan(file: UploadFile = File(...)):
     data = await read_upload(file)
     try:
-        findings = detector.scan_pdf(data)
-        notes = scan_notes(data)
+        findings, notes = await run_pdf_work(scan_with_notes, data)
     except Exception:  # PyMuPDF raises various errors for broken files
         raise HTTPException(400, MSG_DAMAGED)
     return {
@@ -127,8 +152,7 @@ async def preview(file: UploadFile = File(...)):
     """Return PNG images (as data URLs) of every page that has findings."""
     data = await read_upload(file)
     try:
-        findings = detector.scan_pdf(data)
-        pages, truncated = preview_module.render_pages(data, findings)
+        pages, truncated = await run_pdf_work(preview_pages, data)
     except Exception:
         raise HTTPException(400, MSG_DAMAGED)
     return {"pages": pages, "truncated": truncated}
@@ -139,7 +163,7 @@ async def clean(file: UploadFile = File(...)):
     """Return a copy of the PDF without its hidden text, or 400 if a safety check fails."""
     data = await read_upload(file)
     try:
-        cleaned = cleaner.clean_pdf(data)
+        cleaned = await run_pdf_work(cleaner.clean_pdf, data)
     except cleaner.CleanError as err:
         raise HTTPException(400, str(err))
     except Exception:

@@ -441,7 +441,7 @@ def test_user_facing_text_uses_contractions():
     texts = [detector.NOTE_UNREADABLE, detector.REASON_COLOR, detector.REASON_TINY,
              detector.REASON_TRANSPARENT, detector.REASON_NOT_DRAWN, detector.REASON_OFFPAGE,
              main.MSG_TOO_BIG, main.MSG_EMPTY, main.MSG_NO_EXTENSION, main.MSG_DAMAGED,
-             main.MSG_ENCRYPTED, main.MSG_NO_TEXT,
+             main.MSG_ENCRYPTED, main.MSG_NO_TEXT, main.MSG_TOO_MANY_PAGES,
              (Path(__file__).parent.parent / "static" / "index.html").read_text()]
     full_forms = re.compile(r"\b(cannot|could not|is not|are not|do not|does not|will not|was not)\b", re.I)
     for text in texts:
@@ -615,3 +615,97 @@ def test_preview_crop_limit_counts_across_pages(monkeypatch):
 def test_preview_limits_are_named_constants():
     import preview
     assert preview.MAX_PAGES == 10 and preview.MAX_CROPS == 50
+
+
+# Page limit and the single PDF worker thread
+
+def text_pdf(pages):
+    doc = fitz.open()
+    for number in range(pages):
+        doc.new_page().insert_text((72, 72), f"Page {number + 1} of a resume", fontsize=12)
+    data = doc.tobytes()
+    doc.close()
+    return data
+
+
+def test_file_at_the_page_limit_is_scanned():
+    import main
+    response = post_bytes("at_limit.pdf", text_pdf(main.MAX_PAGES))
+    assert response.status_code == 200
+    assert response.json()["status"] == "clean"
+
+
+def test_file_over_the_page_limit_is_rejected_before_scanning(monkeypatch):
+    import main
+    scanned = []
+    monkeypatch.setattr(detector, "scan_pdf", lambda data: scanned.append(1) or [])
+    response = post_bytes("over_limit.pdf", text_pdf(main.MAX_PAGES + 1))
+    assert response.status_code == 400
+    assert response.json()["detail"] == "The file has more than 50 pages."
+    assert scanned == []
+
+
+def test_page_limit_applies_to_preview_and_clean():
+    import main
+    data = text_pdf(main.MAX_PAGES + 1)
+    for path in ("/api/preview", "/api/clean"):
+        response = client.post(path, files={"file": ("big.pdf", data, "application/pdf")})
+        assert response.status_code == 400
+        assert response.json()["detail"] == main.MSG_TOO_MANY_PAGES
+
+
+def test_home_page_answers_while_a_slow_scan_is_running(monkeypatch):
+    import asyncio
+    import time
+    import httpx
+
+    def slow_scan(data):
+        time.sleep(1.5)
+        return []
+
+    monkeypatch.setattr(detector, "scan_pdf", slow_scan)
+    pdf = (SAMPLES / "clean_basic.pdf").read_bytes()
+
+    async def scenario():
+        transport = httpx.ASGITransport(app=app)
+        async with httpx.AsyncClient(transport=transport, base_url="http://test") as http:
+            scan = asyncio.create_task(http.post("/api/scan", files={"file": ("a.pdf", pdf, "application/pdf")}))
+            await asyncio.sleep(0.4)  # the scan is now running on the worker thread
+            started = time.perf_counter()
+            home = await http.get("/")
+            took = time.perf_counter() - started
+            still_running = not scan.done()
+            return home, took, still_running, await scan
+
+    home, took, still_running, scan_response = asyncio.run(scenario())
+    assert still_running
+    assert home.status_code == 200 and took < 0.5
+    assert scan_response.status_code == 200
+
+
+def test_pdf_work_runs_on_one_worker_thread_off_the_event_loop(monkeypatch):
+    import asyncio
+    import threading
+    import httpx
+
+    threads = []
+    real_scan = detector.scan_pdf
+
+    def recording_scan(data):
+        threads.append(threading.get_ident())
+        return real_scan(data)
+
+    monkeypatch.setattr(detector, "scan_pdf", recording_scan)
+    pdf = (SAMPLES / "clean_basic.pdf").read_bytes()
+
+    async def scenario():
+        main_thread = threading.get_ident()
+        transport = httpx.ASGITransport(app=app)
+        async with httpx.AsyncClient(transport=transport, base_url="http://test") as http:
+            responses = await asyncio.gather(*[
+                http.post("/api/scan", files={"file": (f"{n}.pdf", pdf, "application/pdf")}) for n in range(4)])
+        return main_thread, responses
+
+    main_thread, responses = asyncio.run(scenario())
+    assert all(r.status_code == 200 for r in responses)
+    assert len(threads) == 4 and len(set(threads)) == 1 and threads[0] != main_thread

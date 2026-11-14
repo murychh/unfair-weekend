@@ -42,13 +42,21 @@ To run the tests, install the development requirements instead (they include eve
 
 ## API
 
-`POST /api/scan` with a multipart field `file` (PDF, up to 10 MB) returns:
+`POST /api/scan` with a multipart field `file` (PDF, up to 10 MB and 50 pages) returns:
 
     { "filename", "status": "clean" | "hidden_text_found",
       "findings": [ { "page", "text", "lines", "reasons", "note", "bbox", "font_size", "color" } ],
       "notes": [ "..." ] }
 
 `notes` lists extra remarks, for example pages without a text layer that weren't checked.
+
+Files with more than 50 pages (`MAX_PAGES` in `main.py`) are rejected with HTTP 400 and the message
+"The file has more than 50 pages." before anything is scanned. This applies to `/api/scan`, `/api/preview`
+and `/api/clean`.
+
+All PDF work (checking the upload, scanning, previews and cleaning) runs on one worker thread, because PyMuPDF
+doesn't support running on several threads at once. The event loop stays free, so the page and other requests
+still answer while a large file is processed. Several uploads at the same time are processed one after another.
 
 `POST /api/preview` takes the same upload and returns `{ "pages": [ { "page", "width", "height", "outside", "normal", "marked", "findings" } ], "truncated" }`
 for each page with findings. `normal` and `marked` are .png data URLs: the page as a person sees it, and the
