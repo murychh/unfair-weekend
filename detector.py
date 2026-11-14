@@ -48,14 +48,26 @@ def scan_pdf(data):
 
 def scan_page(page):
     """Return the findings of a single page."""
+    flagged, _ = classify_page(page)
+    return [make_finding(page.number + 1, group) for group in group_by_baseline(flagged)]
+
+
+def classify_page(page):
+    """Split the spans of a page into hidden and visible ones.
+
+    Returns (flagged, visible): flagged is a list of (span, reasons), visible a
+    list of span texts in reading order.
+    """
     pixmap = page.get_pixmap(matrix=fitz.Matrix(RENDER_ZOOM, RENDER_ZOOM), alpha=False)
-    flagged = []
+    flagged, visible = [], []
     for line in iter_lines(page):
         for span in line:
             reasons = check_span(span, page.rect, pixmap)
             if reasons:
                 flagged.append((span, reasons))
-    return [make_finding(page.number + 1, group) for group in group_by_baseline(flagged)]
+            else:
+                visible.append(span["text"])
+    return flagged, visible
 
 
 def group_by_baseline(flagged):

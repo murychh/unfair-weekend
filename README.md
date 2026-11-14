@@ -30,6 +30,11 @@ Open http://127.0.0.1:8000 and drop a PDF on the page.
     { "filename", "status": "clean" | "hidden_text_found",
       "findings": [ { "page", "text", "lines", "reasons", "note", "bbox", "font_size", "color" } ] }
 
+`POST /api/clean` takes the same upload and returns a new PDF with the hidden text removed
+(redactions limited to the flagged spans, no visible fill; the original is never modified).
+Before returning the file the server re-scans it (must give zero findings) and checks that the
+visible text is unchanged. If a check fails it returns HTTP 400 saying which one.
+
 ## Test
 
     .venv/bin/python -m pytest
@@ -37,6 +42,7 @@ Open http://127.0.0.1:8000 and drop a PDF on the page.
 ## Files
 
 - `detector.py` - the three detection rules
+- `cleaner.py` - builds the clean copy and runs the safety checks
 - `main.py` - FastAPI app
 - `static/index.html` - the whole frontend
 - `samples/` - one clean resume and one with hidden text

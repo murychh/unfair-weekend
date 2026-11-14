@@ -25,6 +25,10 @@
           border-radius: 6px; word-break: break-word; }
   .meta { color: #5b6577; font-size: 14px; margin-top: 6px; }
   .error { color: #b91c1c; }
+  .ok { color: #15803d; }
+  #cleanbar { margin-top: 16px; display: none; }
+  button { background: #2563eb; color: #fff; border: 0; border-radius: 8px; padding: 8px 16px; font-size: 15px; cursor: pointer; }
+  button:disabled { opacity: .6; cursor: default; }
 </style>
 </head>
 <body>
@@ -42,6 +46,10 @@
     </div>
     <div id="message"></div>
     <ul id="findings"></ul>
+    <div id="cleanbar">
+      <button id="cleanbtn" type="button">Download clean copy</button>
+      <div id="cleanmsg"></div>
+    </div>
   </div>
 </main>
 
@@ -69,7 +77,10 @@ function clientError(file) {
   return null;
 }
 
+let currentFile = null;
+
 async function upload(file) {
+  currentFile = null;
   const problem = clientError(file);
   if (problem) {
     showCard(file.name, null, problem, true);
@@ -85,9 +96,47 @@ async function upload(file) {
       showCard(file.name, null, (typeof result.detail === "string" && result.detail) || "Scan failed", true);
       return;
     }
+    currentFile = file;
     render(result);
   } catch (err) {
     showCard(file.name, null, "Could not reach the server", true);
+  }
+}
+
+document.getElementById("cleanbtn").addEventListener("click", cleanCopy);
+
+async function cleanCopy() {
+  if (!currentFile) return;
+  const button = document.getElementById("cleanbtn");
+  const msg = document.getElementById("cleanmsg");
+  button.disabled = true;
+  msg.className = "meta";
+  msg.textContent = "Cleaning...";
+  const body = new FormData();
+  body.append("file", currentFile);
+  try {
+    const response = await fetch("/api/clean", { method: "POST", body });
+    if (!response.ok) {
+      const result = await response.json().catch(() => ({}));
+      msg.className = "error";
+      msg.textContent = (typeof result.detail === "string" && result.detail) || "Cleaning failed";
+      return;
+    }
+    const url = URL.createObjectURL(await response.blob());
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = "clean_" + currentFile.name;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+    msg.className = "ok";
+    msg.textContent = "Clean copy verified: 0 hidden lines, visible text unchanged.";
+  } catch (err) {
+    msg.className = "error";
+    msg.textContent = "Could not reach the server";
+  } finally {
+    button.disabled = false;
   }
 }
 
@@ -101,6 +150,8 @@ function showCard(name, badge, message, isError) {
   msg.textContent = message || "";
   msg.className = isError ? "error" : "";
   document.getElementById("findings").innerHTML = "";
+  document.getElementById("cleanbar").style.display = "none";
+  document.getElementById("cleanmsg").textContent = "";
 }
 
 function render(result) {
@@ -109,6 +160,7 @@ function render(result) {
   const found = result.status === "hidden_text_found";
   badge.textContent = found ? "Hidden text found" : "Clean";
   badge.className = "badge " + (found ? "found" : "clean");
+  document.getElementById("cleanbar").style.display = found ? "block" : "none";
   const list = document.getElementById("findings");
   for (const f of result.findings) {
     const li = document.createElement("li");

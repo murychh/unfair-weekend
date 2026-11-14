@@ -1,10 +1,12 @@
 from pathlib import Path
+from urllib.parse import quote
 
 from fastapi import FastAPI, File, HTTPException, UploadFile
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, Response
 
 import fitz
 
+import cleaner
 import detector
 
 MAX_UPLOAD_BYTES = 10 * 1024 * 1024
@@ -54,8 +56,8 @@ def has_text_layer(doc):
     return any(page.get_text("text", clip=fitz.INFINITE_RECT()).strip() for page in doc)
 
 
-@app.post("/api/scan")
-async def scan(file: UploadFile = File(...)):
+async def read_upload(file):
+    """Read an upload and validate it in the fixed order; return its bytes."""
     # Check order: empty, not a PDF (first bytes only), too big, then the rest.
     head = await file.read(SIGNATURE_BYTES)
     if len(head) == 0:
@@ -66,6 +68,12 @@ async def scan(file: UploadFile = File(...)):
     if len(data) > MAX_UPLOAD_BYTES:
         raise HTTPException(413, MSG_TOO_BIG)
     validate_upload(data)
+    return data
+
+
+@app.post("/api/scan")
+async def scan(file: UploadFile = File(...)):
+    data = await read_upload(file)
     try:
         findings = detector.scan_pdf(data)
     except Exception:  # PyMuPDF raises various errors for broken files
@@ -75,6 +83,21 @@ async def scan(file: UploadFile = File(...)):
         "status": "hidden_text_found" if findings else "clean",
         "findings": findings,
     }
+
+
+@app.post("/api/clean")
+async def clean(file: UploadFile = File(...)):
+    """Return a copy of the PDF without its hidden text, or 400 if a safety check fails."""
+    data = await read_upload(file)
+    try:
+        cleaned = cleaner.clean_pdf(data)
+    except cleaner.CleanError as err:
+        raise HTTPException(400, str(err))
+    except Exception:
+        raise HTTPException(400, MSG_NOT_PDF)
+    name = "clean_" + (file.filename or "resume.pdf")
+    return Response(cleaned, media_type="application/pdf",
+                    headers={"Content-Disposition": "attachment; filename*=UTF-8''" + quote(name)})
 
 
 @app.get("/")

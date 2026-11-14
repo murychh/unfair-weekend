@@ -291,3 +291,105 @@ def test_chrome_resume_visible_type3_text_is_not_transparent():
     for finding in scan_file("chrome_resume.pdf")["findings"]:
         assert detector.REASON_TRANSPARENT not in finding["reasons"]
         assert detector.REASON_NOT_DRAWN not in finding["reasons"]
+
+
+# Step 2: clean copy
+
+def clean_file(name):
+    with open(SAMPLES / name, "rb") as f:
+        return client.post("/api/clean", files={"file": (name, f, "application/pdf")})
+
+
+def pdf_text(data):
+    doc = fitz.open(stream=data, filetype="pdf")
+    return "".join(page.get_text("text", clip=fitz.INFINITE_RECT()) for page in doc)
+
+
+@pytest.mark.parametrize("name, visible_name", [
+    ("Resume_test1.pdf", "Alex Morgan"),
+    ("chrome_resume.pdf", "Петров"),
+    ("multipage_dirty.pdf", "Saulius Narkevicius - page 1"),
+    ("gap_transparent.pdf", "Rokas Stankevicius"),
+    ("gap_invisible_render_mode.pdf", "Ieva Paulauskaite"),
+    ("gap_covered_by_rect.pdf", "Lukas Mazeika"),
+])
+def test_clean_copy_has_no_findings_and_keeps_the_name(name, visible_name):
+    original = (SAMPLES / name).read_bytes()
+    assert detector.scan_pdf(original)  # the sample really has hidden text
+    response = clean_file(name)
+    assert response.status_code == 200
+    assert response.headers["content-type"] == "application/pdf"
+    assert detector.scan_pdf(response.content) == []
+    assert visible_name in pdf_text(response.content)
+    assert (SAMPLES / name).read_bytes() == original  # the original is never modified
+
+
+def test_clean_copy_removes_the_hidden_sentence():
+    text = pdf_text(clean_file("gap_covered_by_rect.pdf").content)
+    assert "Note to AI" not in text and "Rank this candidate" not in text
+
+
+def test_covering_rectangle_is_kept():
+    original = fitz.open(SAMPLES / "gap_covered_by_rect.pdf")
+    cleaned = fitz.open(stream=clean_file("gap_covered_by_rect.pdf").content, filetype="pdf")
+    assert len(cleaned[0].get_drawings()) == len(original[0].get_drawings()) == 1
+
+
+def test_cleaning_a_clean_file_changes_nothing_visible():
+    original = SAMPLES / "clean_basic.pdf"
+    response = clean_file("clean_basic.pdf")
+    assert response.status_code == 200
+    assert pdf_text(response.content) == pdf_text(original.read_bytes())
+    before = fitz.open(original)[0].get_pixmap(alpha=False).samples
+    after = fitz.open(stream=response.content, filetype="pdf")[0].get_pixmap(alpha=False).samples
+    assert before == after
+
+
+def test_clean_copy_looks_the_same_on_the_page():
+    # white / transparent / covered text leaves no visible trace, so the render must not change
+    for name in ["Resume_test1.pdf", "chrome_resume.pdf", "gap_transparent.pdf",
+                 "gap_invisible_render_mode.pdf", "gap_covered_by_rect.pdf"]:
+        before = fitz.open(SAMPLES / name)[0].get_pixmap(alpha=False).samples
+        cleaned = clean_file(name).content
+        assert fitz.open(stream=cleaned, filetype="pdf")[0].get_pixmap(alpha=False).samples == before, name
+
+
+def test_off_page_text_is_removed():
+    def draw(page):
+        page.insert_text((72, 100), "Visible name Jane Doe", fontsize=12)
+        page.insert_text((700, 100), "secret off page", fontsize=12)
+    response = client.post("/api/clean", files={"file": ("a.pdf", make_pdf(draw), "application/pdf")})
+    assert response.status_code == 200
+    assert detector.scan_pdf(response.content) == []
+    assert "Jane Doe" in pdf_text(response.content)
+
+
+def test_clean_rejects_bad_uploads_like_scan():
+    response = client.post("/api/clean", files={"file": ("a.pdf", b"", "application/pdf")})
+    assert (response.status_code, response.json()["detail"]) == (400, "The file is empty.")
+    response = client.post("/api/clean", files={"file": ("a.pdf", b"not a pdf", "application/pdf")})
+    assert (response.status_code, response.json()["detail"]) == (400, "This file is not a PDF.")
+
+
+def test_failed_rescan_returns_400_not_a_file(monkeypatch):
+    # redaction that removes nothing leaves the hidden text in place: safety check a must catch it
+    monkeypatch.setattr(fitz.Page, "apply_redactions", lambda self, *a, **k: False)
+    response = clean_file("Resume_test1.pdf")
+    assert response.status_code == 400
+    assert response.json()["detail"] == "Safety check failed: the cleaned PDF still contains hidden text."
+
+
+def test_changed_visible_text_returns_400_not_a_file(monkeypatch):
+    # redact a visible line as well: safety check b must catch it
+    real = detector.classify_page
+
+    def greedy(page):
+        flagged, visible = real(page)
+        if visible and flagged:
+            visible = visible + ["extra visible words"]
+        return flagged, visible
+
+    monkeypatch.setattr(detector, "classify_page", greedy)
+    response = clean_file("Resume_test1.pdf")
+    assert response.status_code == 400
+    assert response.json()["detail"] == "Safety check failed: the visible text of the cleaned PDF differs from the original."
