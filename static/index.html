@@ -14,27 +14,31 @@
   #drop.over { border-color: #2563eb; background: #eef4ff; }
   #card { background: #fff; border-radius: 12px; padding: 20px; margin-top: 24px; display: none;
           box-shadow: 0 1px 3px rgba(0,0,0,.1); }
-  .head { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+  .head { display: flex; justify-content: space-between; align-items: center; gap: 12px;
+          padding-bottom: 16px; border-bottom: 1px solid #e3e6ec; }
   .name { font-weight: 600; word-break: break-all; }
   .badge { color: #fff; padding: 4px 12px; border-radius: 999px; font-size: 14px; white-space: nowrap; }
   .clean { background: #15803d; }
   .found { background: #b91c1c; }
-  #findings { list-style: none; padding: 0; margin: 16px 0 0; }
+  .unchecked { background: #5b6577; }
+  #verdict { display: flex; flex-direction: column; gap: 16px; margin-top: 16px; }
+  #verdict > :empty { display: none; }
+  #findings { list-style: none; padding: 0; margin: 0; }
   #findings > li { border-top: 1px solid #e3e6ec; padding: 12px 0; }
+  #findings > li:first-child { border-top: 0; padding-top: 0; }
   .text { white-space: pre-wrap; font-family: ui-monospace, Menlo, monospace; background: #fef2f2; padding: 6px 8px;
           border-radius: 6px; word-break: break-word; }
   .meta { color: #5b6577; font-size: 14px; margin-top: 6px; }
   .error { color: #b91c1c; }
   .ok { color: #15803d; }
-  #cleanbar { margin-top: 16px; display: none; }
-  #okbar { margin-top: 16px; display: none; }
-  button.full { width: 100%; }
+  #actions { margin-top: 16px; }
   .reasons { margin: 4px 0 0; padding-left: 20px; font-size: 14px; color: #5b6577; }
-  .checks { list-style: none; margin: 12px 0 0; padding: 0; color: #15803d; }
+  .checks { list-style: none; margin: 0; padding: 0; color: #15803d; }
   .checks li { padding: 2px 0; }
   .checks li::before { content: "\2713"; font-weight: 700; margin-right: 8px; }
   .buttons { display: flex; gap: 8px; }
   .buttons button { flex: 1 1 0; min-width: 0; }
+  [hidden] { display: none !important; }
   button { background: #2563eb; color: #fff; border: 1px solid #2563eb; border-radius: 8px; padding: 8px 16px; font-size: 15px; cursor: pointer; }
   button.secondary { background: #fff; color: #2563eb; }
   button:disabled { opacity: .6; cursor: default; }
@@ -53,21 +57,19 @@
       <span class="name" id="filename"></span>
       <span class="badge" id="badge"></span>
     </div>
-    <div id="message"></div>
-    <ul id="findings"></ul>
-    <div id="cleanbar">
-      <div class="buttons">
-        <button id="origbtn" class="secondary" type="button">Download original</button>
-        <button id="cleanbtn" type="button">Download clean copy</button>
-      </div>
-      <div id="cleanmsg"></div>
-    </div>
-    <div id="okbar">
-      <button id="okbtn" class="full" type="button">Download clean copy</button>
-      <ul class="checks">
+    <div id="verdict">
+      <div id="message"></div>
+      <ul id="okchecks" class="checks" hidden>
         <li>No hidden text found</li>
         <li>Nothing removed, file unchanged</li>
       </ul>
+      <ul id="findings"></ul>
+      <div id="cleanmsg"></div>
+    </div>
+    <div id="actions" class="buttons" hidden>
+      <button id="origbtn" class="secondary" type="button" hidden>Download original</button>
+      <button id="cleanbtn" type="button" hidden>Download clean copy</button>
+      <button id="okbtn" type="button" hidden>Download clean copy</button>
     </div>
   </div>
 </main>
@@ -208,8 +210,13 @@ function showCard(name, badge, message, isError) {
   msg.textContent = message || "";
   msg.className = isError ? "error" : "";
   document.getElementById("findings").innerHTML = "";
-  document.getElementById("cleanbar").style.display = "none";
-  document.getElementById("okbar").style.display = "none";
+  for (const id of ["okchecks", "actions", "origbtn", "cleanbtn", "okbtn"]) {
+    document.getElementById(id).hidden = true;
+  }
+  if (isError) {
+    badgeEl.textContent = "Can't check";
+    badgeEl.className = "badge unchecked";
+  }
   document.getElementById("cleanmsg").textContent = "";
 }
 
@@ -219,8 +226,11 @@ function render(result) {
   const found = result.status === "hidden_text_found";
   badge.textContent = found ? "Hidden text found" : "Clean";
   badge.className = "badge " + (found ? "found" : "clean");
-  document.getElementById("cleanbar").style.display = found ? "block" : "none";
-  document.getElementById("okbar").style.display = found ? "none" : "block";
+  document.getElementById("actions").hidden = false;
+  document.getElementById("origbtn").hidden = !found;
+  document.getElementById("cleanbtn").hidden = !found;
+  document.getElementById("okbtn").hidden = found;
+  document.getElementById("okchecks").hidden = found;
   const list = document.getElementById("findings");
   for (const f of result.findings) {
     const li = document.createElement("li");
