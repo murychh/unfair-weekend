@@ -1,9 +1,11 @@
 """Detection of text that is hidden in a PDF but readable by text extraction.
 
-Three rules are applied to every text span:
+Five checks are applied to every text span:
   a. the text colour is almost the same as the page background behind it
-  b. the font size is tiny
+  b. the font size is tiny (below MIN_FONT_SIZE)
   c. the span lies outside the visible page area
+  d. the text is fully transparent or uses an invisible render mode
+  e. the text is covered by something or isn't drawn on the page
 """
 import re
 import unicodedata
