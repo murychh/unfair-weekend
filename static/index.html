@@ -374,8 +374,9 @@ function syncButton() {
   document.getElementById("showbtn").textContent = viewer.hidden ? "Show on page" : "Hide page view";
 }
 document.getElementById("showbtn").addEventListener("click", () => {
-  if (!viewer.hidden) { viewer.hidden = true; syncButton(); return; }
-  openViewer(null);
+  if (!viewer.hidden) { viewer.hidden = true; selected = null; markSelected(); syncButton(); return; }
+  selected = null;
+  openViewer(currentFindings[0]);
 });
 function changePage(step) {
   showViewPage(viewIndex + step);
