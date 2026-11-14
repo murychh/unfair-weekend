@@ -35,6 +35,11 @@ On Windows (Command Prompt or PowerShell):
 
 Open http://127.0.0.1:8000 and drop a PDF on the page.
 
+To run the tests, install the development requirements instead (they include everything above):
+
+    .venv/bin/pip install -r requirements-dev.txt          (macOS / Linux)
+    pip install -r requirements-dev.txt                    (Windows, with the venv active)
+
 ## API
 
 `POST /api/scan` with a multipart field `file` (PDF, up to 10 MB) returns:
@@ -78,6 +83,7 @@ visible text is unchanged. If a check fails it returns HTTP 400 saying which one
 - `detector.py` - the detection checks
 - `cleaner.py` - builds the clean copy and runs the safety checks
 - `main.py` - FastAPI app
+- `requirements.txt` - packages needed to run the app; `requirements-dev.txt` adds pytest and httpx for the tests
 - `preview.py` - page images and close-ups for "Show on page"
 - `static/index.html` - the whole frontend
 - `tests/test_scan.py` - the test suite
