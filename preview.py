@@ -24,9 +24,20 @@ def png_data_url(pixmap):
     return "data:image/png;base64," + base64.b64encode(pixmap.tobytes("png")).decode("ascii")
 
 
-def crop_rect(bbox, page_rect):
-    """Close-up area around a finding: padded, at least a minimum size, inside the page."""
+def text_column(page):
+    """Left and right edge of all text on the page (the page margins), or the page edges."""
+    xs = [(b[0], b[2]) for b in page.get_text("blocks") if b[4].strip()]
+    if not xs:
+        return page.rect.x0, page.rect.x1
+    return min(x[0] for x in xs), max(x[1] for x in xs)
+
+
+def crop_rect(bbox, page_rect, column=None):
+    """Close-up area around a finding: full text column wide, padded vertically, inside the page."""
     rect = fitz.Rect(bbox)
+    if column:
+        rect.x0 = min(rect.x0, column[0])
+        rect.x1 = max(rect.x1, column[1])
     rect = fitz.Rect(rect.x0 - CROP_PAD, rect.y0 - CROP_PAD, rect.x1 + CROP_PAD, rect.y1 + CROP_PAD)
     grow_x = max(0.0, CROP_MIN_WIDTH - rect.width)
     grow_y = max(0.0, CROP_MIN_HEIGHT - rect.height)
@@ -58,7 +69,8 @@ def render_pages(data, findings):
             page = doc[number - 1]
             items = [(i, f) for i, f in enumerate(findings) if f["page"] == number]
             drawable = [(i, f) for i, f in items if is_on_page(f, page)]
-            areas = {i: crop_rect(f["bbox"], page.rect) for i, f in drawable}
+            column = text_column(page)
+            areas = {i: crop_rect(f["bbox"], page.rect, column) for i, f in drawable}
             normal = page.get_pixmap(matrix=matrix, alpha=False)
             crops_normal = {i: page.get_pixmap(matrix=crop_matrix, clip=a, alpha=False)
                             for i, a in areas.items()}
