@@ -18,7 +18,16 @@ app = FastAPI(title="ClearRead")
 SIGNATURE_BYTES = 1024
 MSG_TOO_BIG = "File is larger than 10 MB."
 MSG_EMPTY = "The file is empty."
-MSG_NOT_PDF = "This file is not a PDF."
+MSG_NO_EXTENSION = "This file has no extension."
+MSG_DAMAGED = "This file has a .pdf name but isn't a valid PDF. It may be damaged or renamed."
+
+
+def msg_wrong_extension(name):
+    """Message for an upload whose name does not end in .pdf."""
+    ext = (name or "").rpartition(".")[2].lower() if "." in (name or "") else ""
+    if not ext:
+        return MSG_NO_EXTENSION
+    return f"Only PDF files are supported. This is a .{ext} file."
 MSG_ENCRYPTED = "This PDF is password-protected. Please remove the password and upload it again."
 MSG_NO_TEXT = "No text layer found \u2014 this looks like a scanned image."
 
@@ -33,11 +42,11 @@ def validate_upload(data):
     if len(data) == 0:
         raise HTTPException(400, MSG_EMPTY)
     if not looks_like_pdf(data[:SIGNATURE_BYTES]):
-        raise HTTPException(400, MSG_NOT_PDF)
+        raise HTTPException(400, MSG_DAMAGED)
     try:
         doc = fitz.open(stream=data, filetype="pdf")
     except Exception:
-        raise HTTPException(400, MSG_NOT_PDF)
+        raise HTTPException(400, MSG_DAMAGED)
     try:
         if doc.needs_pass:
             raise HTTPException(400, MSG_ENCRYPTED)
@@ -46,7 +55,7 @@ def validate_upload(data):
     except HTTPException:
         raise
     except Exception:
-        raise HTTPException(400, MSG_NOT_PDF)
+        raise HTTPException(400, MSG_DAMAGED)
     finally:
         doc.close()
 
@@ -58,12 +67,14 @@ def has_text_layer(doc):
 
 async def read_upload(file):
     """Read an upload and validate it in the fixed order; return its bytes."""
-    # Check order: empty, not a PDF (first bytes only), too big, then the rest.
+    # Check order: empty, wrong name / not a PDF (first bytes only), too big, then the rest.
     head = await file.read(SIGNATURE_BYTES)
     if len(head) == 0:
         raise HTTPException(400, MSG_EMPTY)
+    if not (file.filename or "").lower().endswith(".pdf"):
+        raise HTTPException(400, msg_wrong_extension(file.filename))
     if not looks_like_pdf(head):
-        raise HTTPException(400, MSG_NOT_PDF)
+        raise HTTPException(400, MSG_DAMAGED)
     data = head + await file.read(MAX_UPLOAD_BYTES + 1 - len(head))
     if len(data) > MAX_UPLOAD_BYTES:
         raise HTTPException(413, MSG_TOO_BIG)
@@ -77,7 +88,7 @@ async def scan(file: UploadFile = File(...)):
     try:
         findings = detector.scan_pdf(data)
     except Exception:  # PyMuPDF raises various errors for broken files
-        raise HTTPException(400, MSG_NOT_PDF)
+        raise HTTPException(400, MSG_DAMAGED)
     return {
         "filename": file.filename,
         "status": "hidden_text_found" if findings else "clean",
@@ -94,7 +105,7 @@ async def clean(file: UploadFile = File(...)):
     except cleaner.CleanError as err:
         raise HTTPException(400, str(err))
     except Exception:
-        raise HTTPException(400, MSG_NOT_PDF)
+        raise HTTPException(400, MSG_DAMAGED)
     name = "clean_" + (file.filename or "resume.pdf")
     return Response(cleaned, media_type="application/pdf",
                     headers={"Content-Disposition": "attachment; filename*=UTF-8''" + quote(name)})

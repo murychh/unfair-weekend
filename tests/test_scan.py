@@ -203,13 +203,38 @@ def test_empty_file_is_rejected():
 def test_non_pdf_is_rejected():
     response = post_bytes("a.pdf", b"not a pdf")
     assert response.status_code == 400
-    assert response.json()["detail"] == "This file is not a PDF."
+    assert response.json()["detail"] == "This file has a .pdf name but isn't a valid PDF. It may be damaged or renamed."
 
 
-def test_large_non_pdf_says_not_a_pdf_not_too_big():
-    response = post_bytes("movie.mov", b"\x00\x00\x00\x14ftypqt  " + b"\x00" * (12 * 1024 * 1024))
+def test_large_non_pdf_says_wrong_type_not_too_big():
+    response = post_bytes("movie.MOV", b"\x00\x00\x00\x14ftypqt  " + b"\x00" * (12 * 1024 * 1024))
     assert response.status_code == 400
-    assert response.json()["detail"] == "This file is not a PDF."
+    assert response.json()["detail"] == "Only PDF files are supported. This is a .mov file."
+
+
+def test_large_renamed_file_says_damaged_not_too_big():
+    response = post_bytes("movie.pdf", b"\x00\x00\x00\x14ftypqt  " + b"\x00" * (12 * 1024 * 1024))
+    assert response.status_code == 400
+    assert response.json()["detail"] == "This file has a .pdf name but isn't a valid PDF. It may be damaged or renamed."
+
+
+@pytest.mark.parametrize("name, message", [
+    ("photo.png", "Only PDF files are supported. This is a .png file."),
+    ("notes.TXT", "Only PDF files are supported. This is a .txt file."),
+    ("archive.tar.gz", "Only PDF files are supported. This is a .gz file."),
+    ("resume", "This file has no extension."),
+    ("resume.", "This file has no extension."),
+    ("resume.pdf.exe", "Only PDF files are supported. This is a .exe file."),
+])
+def test_wrong_extension_messages(name, message):
+    response = post_bytes(name, (SAMPLES / "clean_basic.pdf").read_bytes())
+    assert response.status_code == 400
+    assert response.json()["detail"] == message
+
+
+def test_upper_case_pdf_extension_is_accepted():
+    response = post_bytes("RESUME.PDF", (SAMPLES / "clean_basic.pdf").read_bytes())
+    assert response.status_code == 200
 
 
 def test_large_pdf_says_too_big():
@@ -228,13 +253,13 @@ def test_png_is_rejected():
     png = b"\x89PNG\r\n\x1a\n" + b"\x00" * 64
     response = post_bytes("image.pdf", png)
     assert response.status_code == 400
-    assert response.json()["detail"] == "This file is not a PDF."
+    assert response.json()["detail"] == "This file has a .pdf name but isn't a valid PDF. It may be damaged or renamed."
 
 
 def test_truncated_pdf_is_rejected_cleanly():
     response = post_bytes("broken.pdf", b"%PDF-1.7\n1 0 obj <<")
     assert response.status_code == 400
-    assert response.json()["detail"] == "This file is not a PDF."
+    assert response.json()["detail"] == "This file has a .pdf name but isn't a valid PDF. It may be damaged or renamed."
 
 
 def test_encrypted_pdf_is_rejected():
@@ -368,7 +393,9 @@ def test_clean_rejects_bad_uploads_like_scan():
     response = client.post("/api/clean", files={"file": ("a.pdf", b"", "application/pdf")})
     assert (response.status_code, response.json()["detail"]) == (400, "The file is empty.")
     response = client.post("/api/clean", files={"file": ("a.pdf", b"not a pdf", "application/pdf")})
-    assert (response.status_code, response.json()["detail"]) == (400, "This file is not a PDF.")
+    assert (response.status_code, response.json()["detail"]) == (400, "This file has a .pdf name but isn't a valid PDF. It may be damaged or renamed.")
+    response = client.post("/api/clean", files={"file": ("a.png", b"x", "image/png")})
+    assert (response.status_code, response.json()["detail"]) == (400, "Only PDF files are supported. This is a .png file.")
 
 
 def test_failed_rescan_returns_400_not_a_file(monkeypatch):
