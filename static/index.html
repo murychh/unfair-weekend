@@ -36,9 +36,9 @@
 <body>
 <main>
   <h1>ClearRead</h1>
-  <p class="sub">Find text in a PDF resume that people cannot see but AI screening tools can read.</p>
+  <p class="sub">Find text in a résumé that people can't see but AI screening tools can read.</p>
 
-  <div id="drop">Drop a PDF here or click to choose one</div>
+  <div id="drop">Drop a .pdf file here or click to choose one</div>
   <input id="picker" type="file" accept="application/pdf" hidden>
 
   <div id="card">
@@ -81,13 +81,13 @@ async function clientError(file) {
   if (!/\.pdf$/i.test(file.name)) {
     const dot = file.name.lastIndexOf(".");
     const ext = dot >= 0 ? file.name.slice(dot + 1).toLowerCase() : "";
-    return ext ? "Only PDF files are supported. This is a ." + ext + " file." : "This file has no extension.";
+    return ext ? "Only .pdf files are supported. This is a ." + ext + " file." : "Only .pdf files are supported. This file has no extension.";
   }
   const head = await file.slice(0, 1024).text();
   if (!head.trimStart().startsWith("%PDF-")) {
-    return "This file has a .pdf name but isn't a valid PDF. It may be damaged or renamed.";
+    return "This .pdf file can't be opened. It may be damaged or renamed from another file type.";
   }
-  if (file.size > MAX_BYTES) return "File is larger than 10 MB.";
+  if (file.size > MAX_BYTES) return "The file is larger than 10 MB.";
   return null;
 }
 

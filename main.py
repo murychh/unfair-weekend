@@ -16,10 +16,12 @@ app = FastAPI(title="ClearRead")
 
 
 SIGNATURE_BYTES = 1024
-MSG_TOO_BIG = "File is larger than 10 MB."
+MSG_TOO_BIG = "The file is larger than 10 MB."
 MSG_EMPTY = "The file is empty."
-MSG_NO_EXTENSION = "This file has no extension."
-MSG_DAMAGED = "This file has a .pdf name but isn't a valid PDF. It may be damaged or renamed."
+MSG_NO_EXTENSION = "Only .pdf files are supported. This file has no extension."
+MSG_DAMAGED = "This .pdf file can't be opened. It may be damaged or renamed from another file type."
+MSG_ENCRYPTED = "This .pdf file is password-protected. Remove the password and upload it again."
+MSG_NO_TEXT = "No text layer found. This looks like a scanned image."
 
 
 def msg_wrong_extension(name):
@@ -27,9 +29,7 @@ def msg_wrong_extension(name):
     ext = (name or "").rpartition(".")[2].lower() if "." in (name or "") else ""
     if not ext:
         return MSG_NO_EXTENSION
-    return f"Only PDF files are supported. This is a .{ext} file."
-MSG_ENCRYPTED = "This PDF is password-protected. Please remove the password and upload it again."
-MSG_NO_TEXT = "No text layer found \u2014 this looks like a scanned image."
+    return f"Only .pdf files are supported. This is a .{ext} file."
 
 
 def looks_like_pdf(head):
@@ -46,6 +46,9 @@ def validate_upload(data):
     try:
         doc = fitz.open(stream=data, filetype="pdf")
     except Exception:
+        raise HTTPException(400, MSG_DAMAGED)
+    if doc.is_repaired:  # MuPDF had to fix a format or syntax error, e.g. a truncated file
+        doc.close()
         raise HTTPException(400, MSG_DAMAGED)
     try:
         if doc.needs_pass:

@@ -203,28 +203,28 @@ def test_empty_file_is_rejected():
 def test_non_pdf_is_rejected():
     response = post_bytes("a.pdf", b"not a pdf")
     assert response.status_code == 400
-    assert response.json()["detail"] == "This file has a .pdf name but isn't a valid PDF. It may be damaged or renamed."
+    assert response.json()["detail"] == "This .pdf file can't be opened. It may be damaged or renamed from another file type."
 
 
 def test_large_non_pdf_says_wrong_type_not_too_big():
     response = post_bytes("movie.MOV", b"\x00\x00\x00\x14ftypqt  " + b"\x00" * (12 * 1024 * 1024))
     assert response.status_code == 400
-    assert response.json()["detail"] == "Only PDF files are supported. This is a .mov file."
+    assert response.json()["detail"] == "Only .pdf files are supported. This is a .mov file."
 
 
 def test_large_renamed_file_says_damaged_not_too_big():
     response = post_bytes("movie.pdf", b"\x00\x00\x00\x14ftypqt  " + b"\x00" * (12 * 1024 * 1024))
     assert response.status_code == 400
-    assert response.json()["detail"] == "This file has a .pdf name but isn't a valid PDF. It may be damaged or renamed."
+    assert response.json()["detail"] == "This .pdf file can't be opened. It may be damaged or renamed from another file type."
 
 
 @pytest.mark.parametrize("name, message", [
-    ("photo.png", "Only PDF files are supported. This is a .png file."),
-    ("notes.TXT", "Only PDF files are supported. This is a .txt file."),
-    ("archive.tar.gz", "Only PDF files are supported. This is a .gz file."),
-    ("resume", "This file has no extension."),
-    ("resume.", "This file has no extension."),
-    ("resume.pdf.exe", "Only PDF files are supported. This is a .exe file."),
+    ("photo.png", "Only .pdf files are supported. This is a .png file."),
+    ("notes.TXT", "Only .pdf files are supported. This is a .txt file."),
+    ("archive.tar.gz", "Only .pdf files are supported. This is a .gz file."),
+    ("resume", "Only .pdf files are supported. This file has no extension."),
+    ("resume.", "Only .pdf files are supported. This file has no extension."),
+    ("resume.pdf.exe", "Only .pdf files are supported. This is a .exe file."),
 ])
 def test_wrong_extension_messages(name, message):
     response = post_bytes(name, (SAMPLES / "clean_basic.pdf").read_bytes())
@@ -240,7 +240,7 @@ def test_upper_case_pdf_extension_is_accepted():
 def test_large_pdf_says_too_big():
     response = post_bytes("big.pdf", b"%PDF-1.7\n" + b"0" * (12 * 1024 * 1024))
     assert response.status_code == 413
-    assert response.json()["detail"] == "File is larger than 10 MB."
+    assert response.json()["detail"] == "The file is larger than 10 MB."
 
 
 def test_pdf_signature_may_follow_leading_whitespace():
@@ -253,13 +253,13 @@ def test_png_is_rejected():
     png = b"\x89PNG\r\n\x1a\n" + b"\x00" * 64
     response = post_bytes("image.pdf", png)
     assert response.status_code == 400
-    assert response.json()["detail"] == "This file has a .pdf name but isn't a valid PDF. It may be damaged or renamed."
+    assert response.json()["detail"] == "This .pdf file can't be opened. It may be damaged or renamed from another file type."
 
 
 def test_truncated_pdf_is_rejected_cleanly():
     response = post_bytes("broken.pdf", b"%PDF-1.7\n1 0 obj <<")
     assert response.status_code == 400
-    assert response.json()["detail"] == "This file has a .pdf name but isn't a valid PDF. It may be damaged or renamed."
+    assert response.json()["detail"] == "This .pdf file can't be opened. It may be damaged or renamed from another file type."
 
 
 def test_encrypted_pdf_is_rejected():
@@ -267,14 +267,14 @@ def test_encrypted_pdf_is_rejected():
         response = post_bytes("encrypted.pdf", f.read())
     assert response.status_code == 400
     assert response.json()["detail"] == (
-        "This PDF is password-protected. Please remove the password and upload it again.")
+        "This .pdf file is password-protected. Remove the password and upload it again.")
 
 
 def test_scanned_image_is_not_reported_clean():
     with open(SAMPLES / "edge_scanned_image.pdf", "rb") as f:
         response = post_bytes("edge_scanned_image.pdf", f.read())
     assert response.status_code == 400
-    assert response.json()["detail"].startswith("No text layer found")
+    assert response.json()["detail"] == "No text layer found. This looks like a scanned image."
     assert "status" not in response.json()
 
 
@@ -393,9 +393,9 @@ def test_clean_rejects_bad_uploads_like_scan():
     response = client.post("/api/clean", files={"file": ("a.pdf", b"", "application/pdf")})
     assert (response.status_code, response.json()["detail"]) == (400, "The file is empty.")
     response = client.post("/api/clean", files={"file": ("a.pdf", b"not a pdf", "application/pdf")})
-    assert (response.status_code, response.json()["detail"]) == (400, "This file has a .pdf name but isn't a valid PDF. It may be damaged or renamed.")
+    assert (response.status_code, response.json()["detail"]) == (400, "This .pdf file can't be opened. It may be damaged or renamed from another file type.")
     response = client.post("/api/clean", files={"file": ("a.png", b"x", "image/png")})
-    assert (response.status_code, response.json()["detail"]) == (400, "Only PDF files are supported. This is a .png file.")
+    assert (response.status_code, response.json()["detail"]) == (400, "Only .pdf files are supported. This is a .png file.")
 
 
 def test_failed_rescan_returns_400_not_a_file(monkeypatch):
@@ -403,7 +403,7 @@ def test_failed_rescan_returns_400_not_a_file(monkeypatch):
     monkeypatch.setattr(fitz.Page, "apply_redactions", lambda self, *a, **k: False)
     response = clean_file("Resume_test1.pdf")
     assert response.status_code == 400
-    assert response.json()["detail"] == "Safety check failed: the cleaned PDF still contains hidden text."
+    assert response.json()["detail"] == "Safety check failed: the cleaned .pdf file still contains hidden text."
 
 
 def test_changed_visible_text_returns_400_not_a_file(monkeypatch):
@@ -419,4 +419,17 @@ def test_changed_visible_text_returns_400_not_a_file(monkeypatch):
     monkeypatch.setattr(detector, "classify_page", greedy)
     response = clean_file("Resume_test1.pdf")
     assert response.status_code == 400
-    assert response.json()["detail"] == "Safety check failed: the visible text of the cleaned PDF differs from the original."
+    assert response.json()["detail"] == "Safety check failed: the visible text of the cleaned .pdf file differs from the original."
+
+
+def test_truncated_pdf_says_it_cannot_be_opened():
+    data = (SAMPLES / "clean_basic.pdf").read_bytes()
+    for cut in (len(data) // 2, len(data) - 60):
+        response = post_bytes("cut.pdf", data[:cut])
+        assert response.status_code == 400
+        assert response.json()["detail"] == "This .pdf file can't be opened. It may be damaged or renamed from another file type."
+
+
+def test_no_extension_message():
+    response = post_bytes("resume", b"%PDF-1.7")
+    assert response.json()["detail"] == "Only .pdf files are supported. This file has no extension."

@@ -9,8 +9,8 @@ import fitz  # PyMuPDF
 
 import detector
 
-MSG_STILL_HIDDEN = "Safety check failed: the cleaned PDF still contains hidden text."
-MSG_TEXT_CHANGED = "Safety check failed: the visible text of the cleaned PDF differs from the original."
+MSG_STILL_HIDDEN = "Safety check failed: the cleaned .pdf file still contains hidden text."
+MSG_TEXT_CHANGED = "Safety check failed: the visible text of the cleaned .pdf file differs from the original."
 
 
 class CleanError(Exception):
