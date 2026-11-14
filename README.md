@@ -18,6 +18,14 @@ page, and can build a clean copy without it. Files aren't stored after checking.
 - the text is covered by something or isn't drawn on the page
 - the text is placed outside the visible page area
 
+## About the project
+
+Built at Unfair Weekend.
+
+- Team: Broken AI
+- Devpost page: https://devpost.com/software/clearread-ab7gvd
+- Licensed under MIT, see the [LICENSE](LICENSE) file.
+
 ## Run
 
 On macOS / Linux (Terminal):
@@ -39,6 +47,22 @@ To run the tests, install the development requirements instead (they include eve
 
     .venv/bin/pip install -r requirements-dev.txt          (macOS / Linux)
     pip install -r requirements-dev.txt                    (Windows, with the venv active)
+
+## Test
+
+    .venv/bin/python -m pytest
+
+## Files
+
+- `detector.py` - the detection checks
+- `cleaner.py` - builds the clean copy and runs the safety checks
+- `main.py` - FastAPI app
+- `requirements.txt` - packages needed to run the app; `requirements-dev.txt` adds pytest and httpx for the tests
+- `preview.py` - page images and close-ups for "Show on page"
+- `static/index.html` - the whole frontend
+- `tests/test_scan.py` - the test suite
+- `samples/` - test resumes: clean, dirty (hidden text), gap (cases the checks must still catch), edge cases
+  (scanned image, encrypted), multi-page and multi-language files
 
 ## API
 
@@ -81,19 +105,3 @@ the selection.
 (redactions limited to the flagged spans, no visible fill; the original is never modified).
 Before returning the file the server re-scans it (must give zero findings) and checks that the
 visible text is unchanged. If a check fails it returns HTTP 400 saying which one.
-
-## Test
-
-    .venv/bin/python -m pytest
-
-## Files
-
-- `detector.py` - the detection checks
-- `cleaner.py` - builds the clean copy and runs the safety checks
-- `main.py` - FastAPI app
-- `requirements.txt` - packages needed to run the app; `requirements-dev.txt` adds pytest and httpx for the tests
-- `preview.py` - page images and close-ups for "Show on page"
-- `static/index.html` - the whole frontend
-- `tests/test_scan.py` - the test suite
-- `samples/` - test resumes: clean, dirty (hidden text), gap (cases the checks must still catch), edge cases
-  (scanned image, encrypted), multi-page and multi-language files
